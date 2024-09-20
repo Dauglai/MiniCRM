@@ -5,6 +5,9 @@ from django.db import models
 class Role(models.Model):
     name = models.CharField(verbose_name="Название роли", max_length=100)
 
+    def __str__(self):
+        return self.name
+
 
 class Profile(models.Model):
     photo = models.ImageField(blank=True, null=True)
@@ -15,6 +18,9 @@ class Profile(models.Model):
     role = models.ForeignKey(Role, on_delete=models.CASCADE, null=True, blank=True)
     personal = models.CharField(verbose_name="Личный телефон", max_length=10)
     work = models.CharField(verbose_name="Рабочий телефон", max_length=10)
+
+    def __str__(self):
+        return f'{self.surname} {self.name} {self.patronymic}'
 
 
 class Topic(models.Model):
