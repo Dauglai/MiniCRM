@@ -10,6 +10,7 @@ class Role(models.Model):
 
 
 class Profile(models.Model):
+    author = models.OneToOneField(User, on_delete=models.CASCADE)
     photo = models.ImageField(blank=True, null=True)
     surname = models.CharField(verbose_name="Фамилия", max_length=100)
     name = models.CharField(verbose_name="Имя", max_length=100)
@@ -54,6 +55,12 @@ class Task(models.Model):
         return self.name
 
 
+class Coordination(models.Model):
+    task = models.ForeignKey(Task, on_delete=models.CASCADE)
+    is_agreed = models.BooleanField(verbose_name="Согласовано", default=False)
+    coordinator = models.ForeignKey(User, verbose_name="Автор", on_delete=models.CASCADE)
+
+
 class Comment(models.Model):
     task = models.ForeignKey(Task, on_delete=models.CASCADE)
     owner = models.ForeignKey(User, on_delete=models.CASCADE)
@@ -63,6 +70,6 @@ class Comment(models.Model):
 
 class Result(models.Model):
     task = models.ForeignKey(Task, on_delete=models.CASCADE)
-    owner = models.ForeignKey(User, on_delete=models.CASCADE)
+    author = models.ForeignKey(User, on_delete=models.CASCADE)
     description = models.TextField(verbose_name="Описание", max_length=10000)
     file = models.FileField(verbose_name="Файлы")
