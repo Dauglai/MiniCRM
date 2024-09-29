@@ -1,18 +1,6 @@
 from rest_framework import serializers
-from .models import Task, Status, Topic, Profile, Comment, Result, Coordination
+from .models import Task, Topic, Profile, Comment, Result, Coordination
 
-
-class TaskSerializer(serializers.ModelSerializer):
-    author = serializers.HiddenField(default=serializers.CurrentUserDefault())
-    class Meta:
-        model = Task
-        fields = '__all__'
-        depth = 1
-
-class StatusSerializer(serializers.ModelSerializer):
-    class Meta:
-        model = Status
-        fields = '__all__'
 
 class TopicSerializer(serializers.ModelSerializer):
     class Meta:
@@ -20,7 +8,7 @@ class TopicSerializer(serializers.ModelSerializer):
         fields = '__all__'
 
 class ProfileSerializer(serializers.ModelSerializer):
-    author = serializers.HiddenField(default=serializers.CurrentUserDefault())
+    author = serializers.CurrentUserDefault()
     class Meta:
         model = Profile
         fields = '__all__'
@@ -31,13 +19,25 @@ class CommentSerializer(serializers.ModelSerializer):
         fields = '__all__'
 
 class ResultSerializer(serializers.ModelSerializer):
-    author = serializers.HiddenField(default=serializers.CurrentUserDefault())
+    author = serializers.CurrentUserDefault()
     class Meta:
         model = Result
         fields = '__all__'
 
 class CoordinationSerializer(serializers.ModelSerializer):
-    coordinator = serializers.HiddenField(default=serializers.CurrentUserDefault())
+    coordinator = serializers.CurrentUserDefault()
     class Meta:
         model = Coordination
-        fields = '__all__'
+        fields = ['coordinator', 'is_agreed', 'datetime']
+
+
+class TaskSerializer(serializers.ModelSerializer):
+    author = serializers.CurrentUserDefault()
+    topic = TopicSerializer(read_only=True)
+    coordination_set = CoordinationSerializer(many=True, read_only=True)
+    comment_set = CommentSerializer(many=True, read_only=True)
+    result = ResultSerializer(many=True, read_only=True)
+    class Meta:
+        model = Task
+        fields = ['name', 'topic', 'datetime', 'deadline', 'description', 'file', 'author', 'addressee', 'status',
+                  'observers', 'is_agreed', 'coordinators', 'coordination_set', 'comment_set', 'result']
