@@ -5,7 +5,7 @@ from drf_yasg.views import get_schema_view
 from drf_yasg import openapi
 from django.conf import settings
 from employee.views import *
-from rest_framework import routers
+from rest_framework import routers, permissions
 
 schema_view = get_schema_view(
    openapi.Info(
@@ -21,18 +21,17 @@ schema_view = get_schema_view(
 )
 
 router = routers.SimpleRouter()
-router.register(r'topic', TopicViewSet)
-router.register(r'comment', CommentViewSet)
 
 urlpatterns = [
     path('admin/', admin.site.urls),
     path('api-auth/', include('rest_framework.urls')),
     path('api/v1/', include(router.urls)),
     path('accounts/profile/', ProfileAPIList.as_view()),
-    path('profile/<int:pk>/', ProfileAPIUpdate.as_view()),
+    path('accounts/profile/<int:pk>/', ProfileAPIUpdate.as_view()),
     path('profiledelete/<int:pk>/', ProfileAPIDestroy.as_view()),
     path('task/', TaskAPIList.as_view()),
     path('task/<int:pk>/', TaskAPIUpdate.as_view()),
+    path('task/<int:pk>/comments/', CommentApiView.as_view()),
     path('coordination/', CoordinationApiView.as_view()),
     path('result/', ResultAPIList.as_view()),
     path('result/<int:pk>/', ResultAPIUpdate.as_view()),

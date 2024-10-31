@@ -25,7 +25,8 @@ SECRET_KEY = 'django-insecure-_r28)!dlsp+j_$$f*2=doq_5j$5va5a9x3k5dr6$+!)(2rs@+z
 # SECURITY WARNING: don't run with debug turned on in production!
 DEBUG = True
 
-ALLOWED_HOSTS = []
+ALLOWED_HOSTS = ['localhost', '127.0.0.1', ]
+
 
 
 # Application definition
@@ -45,14 +46,28 @@ INSTALLED_APPS = [
 ]
 
 MIDDLEWARE = [
+    'corsheaders.middleware.CorsMiddleware',  # Для CORS
+    'django.middleware.common.CommonMiddleware',
+    'django.middleware.csrf.CsrfViewMiddleware',  # CSRF Middleware
+    'django.contrib.sessions.middleware.SessionMiddleware',  # Middleware для сессий
     'django.middleware.security.SecurityMiddleware',
-    'django.contrib.sessions.middleware.SessionMiddleware',
+    'django.contrib.auth.middleware.AuthenticationMiddleware',
     'django.middleware.common.CommonMiddleware',
     'django.middleware.csrf.CsrfViewMiddleware',
-    'django.contrib.auth.middleware.AuthenticationMiddleware',
     'django.contrib.messages.middleware.MessageMiddleware',
-    'django.middleware.clickjacking.XFrameOptionsMiddleware',
 ]
+
+CORS_ALLOWED_ORIGINS = [
+    "http://localhost:3000",
+    "http://127.0.0.1:3000"
+]
+CORS_ALLOW_CREDENTIALS = True
+CORS_ORIGIN_WHITELIST = [
+    'http://localhost:3000',  # React фронтенд
+]
+CSRF_TRUSTED_ORIGINS = ['http://localhost:3000']
+SESSION_COOKIE_HTTPONLY = True  # Безопасность куки
+SESSION_COOKIE_SAMESITE = 'Lax'
 
 ROOT_URLCONF = 'MiniCRM.urls'
 
@@ -92,6 +107,7 @@ REST_FRAMEWORK = {
         'rest_framework.authentication.BasicAuthentication',
     ],
     'DEFAULT_PERMISSION_CLASSES':[
+        'rest_framework.permissions.IsAuthenticated',
         'rest_framework.permissions.IsAdminUser',
         'rest_framework.permissions.AllowAny',
     ]
