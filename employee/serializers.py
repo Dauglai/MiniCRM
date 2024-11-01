@@ -55,12 +55,9 @@ class TaskSerializer(serializers.ModelSerializer):
     result_set = ResultSerializer(many=True, read_only=True)
     observer_set = ProfileSerializer(many=True, read_only=True, source='observers')
     coordinator_set = ProfileSerializer(many=True, read_only=True, source='coordinators')
-    task_count = serializers.SerializerMethodField()
     class Meta:
         model = Task
         fields = ['id','name', 'datetime', 'deadline', 'description', 'file', 'author', 'addressee', 'status',
                   'observers', 'coordinators', 'observer_set', 'is_agreed', 'coordinator_set', 'coordination_set',
-                  'comment_set', 'result_set', 'task_count']
+                  'comment_set', 'result_set']
 
-    def get_task_count(self, obj):
-        return Task.objects.count()

@@ -3,18 +3,58 @@ from drf_yasg.utils import swagger_auto_schema
 
 from .serializers import *
 from rest_framework.permissions import IsAuthenticatedOrReadOnly, IsAuthenticated
-from rest_framework import viewsets, generics, permissions, status
+from rest_framework import viewsets, generics, permissions, status, pagination
 from .models import Task, Profile, Comment, Result, Coordination
 from rest_framework.response import Response
 from .permissions import *
 from rest_framework.views import APIView
 import datetime
+from django_filters import rest_framework as filters
+from django.db.models import Q
 
 
-class TaskAPIList(generics.ListCreateAPIView):
-    queryset = Task.objects.all()
+class TaskFilter(filters.FilterSet):
+    name = filters.CharFilter(field_name='name', lookup_expr='icontains')
+    status = filters.CharFilter(field_name='status', lookup_expr='iexact')
+    deadline = filters.DateFilter(field_name='deadline')
+
+    class Meta:
+        model = Task
+        fields = ['name', 'status', 'deadline']
+
+
+class TaskAPIListPagination(pagination.PageNumberPagination):
+    page_size = 10
+    page_size_query_param = 'page_size'
+    max_page_size = 100
+
+
+class TaskAPIList(generics.ListAPIView):
     serializer_class = TaskSerializer
     permission_classes = (IsAuthenticated,)
+    pagination_class = TaskAPIListPagination
+    filter_backends = [filters.DjangoFilterBackend]
+    filterset_class = TaskFilter
+
+    def get_queryset(self):
+        user = self.request.user
+        role = self.request.query_params.get('role', 'author')  # Получаем роль из параметра запроса
+
+        # Возвращаем задачи, где текущий пользователь - автор или адресат, в зависимости от роли
+        if role == 'addressee':
+            return Task.objects.filter(addressee=user.profile).order_by('id')
+        if role == 'author':
+            return Task.objects.filter(author=user.profile).order_by('id')
+        if role == 'coordinator':
+            return Task.objects.filter(coordinators=user.profile).order_by('id')
+        if role == 'observer':
+            return Task.objects.filter(observers=user.profile).order_by('id')
+        return Task.objects.filter(
+            Q(addressee=user.profile) |
+            Q(coordinators=user.profile) |
+            Q(author=user.profile) |
+            Q(observers=user.profile)
+        ).distinct().order_by('id')
 
 
 class TaskAPIUpdate(generics.RetrieveUpdateAPIView):
