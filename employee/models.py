@@ -35,7 +35,7 @@ class Task(models.Model):
     description = models.TextField(verbose_name="Описание", max_length=10000)
     file = models.FileField(verbose_name="Файлы", null=True, blank=True)
     author = models.ForeignKey(Profile, verbose_name="Автор", on_delete=models.CASCADE)
-    addressee = models.ForeignKey(Profile, related_name="addressee", on_delete=models.CASCADE, null=True)
+    addressee = models.ForeignKey(Profile, related_name="addressee", on_delete=models.CASCADE)
     status = models.CharField(verbose_name="Название роли", choices=STATUS_CHOISES, default='На согласовании', max_length=100)
     observers = models.ManyToManyField(Profile, related_name="observers", blank=True)
     is_agreed = models.BooleanField(verbose_name="Завершена", default=False)
@@ -64,7 +64,7 @@ class Result(models.Model):
     author = models.ForeignKey(Profile, on_delete=models.CASCADE)
     is_end = models.BooleanField(verbose_name="Выполнена", default=False)
     description = models.TextField(verbose_name="Описание", max_length=10000)
-    file = models.FileField(verbose_name="Файлы")
+    file = models.FileField(verbose_name="Файлы", blank=True, null=True)
 
 class Role(models.Model):
     ROLE_CHOISES = (

@@ -22,6 +22,9 @@ schema_view = get_schema_view(
 
 router = routers.SimpleRouter()
 
+
+
+
 urlpatterns = [
     path('admin/', admin.site.urls),
     path('api-auth/', include('rest_framework.urls')),
@@ -30,6 +33,7 @@ urlpatterns = [
     path('accounts/profile/<int:pk>/', ProfileAPIUpdate.as_view()),
     path('profiledelete/<int:pk>/', ProfileAPIDestroy.as_view()),
     path('task/', TaskAPIList.as_view()),
+    path('task/create/', TaskAPICreate.as_view()),
     path('task/<int:pk>/', TaskAPIUpdate.as_view()),
     path('task/<int:pk>/comments/', CommentApiView.as_view()),
     path('coordination/', CoordinationApiView.as_view()),

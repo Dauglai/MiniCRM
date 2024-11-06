@@ -12,9 +12,10 @@ class UserSerializer(serializers.ModelSerializer):
 
 class ProfileSerializer(serializers.ModelSerializer):
     author = UserSerializer(read_only=True)
+
     class Meta:
         model = Profile
-        fields = ['name', 'surname', 'patronymic', 'work', 'personal', 'role', 'birthday', 'photo', 'author']
+        fields = [ 'name', 'surname', 'patronymic', 'work', 'personal', 'role', 'birthday', 'photo', 'author']
 
 class ProfileCreateSerializer(serializers.ModelSerializer):
     author = serializers.CurrentUserDefault()
@@ -45,6 +46,12 @@ class CoordinationSerializer(serializers.ModelSerializer):
     class Meta:
         model = Coordination
         fields = ['coordinator', 'is_agreed', 'datetime']
+
+class TaskCreateSerializer(serializers.ModelSerializer):
+    author = serializers.HiddenField(default=serializers.CurrentUserDefault())
+    class Meta:
+        model = Task
+        fields = ['author', 'name', 'deadline', 'description', 'file', 'addressee', 'observers', 'coordinators']
 
 
 class TaskSerializer(serializers.ModelSerializer):

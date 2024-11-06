@@ -42,6 +42,7 @@ INSTALLED_APPS = [
     'employee.apps.EmployeeConfig',
     'rest_framework',
     'corsheaders',
+    'django_filters',
 
 ]
 
@@ -111,6 +112,7 @@ REST_FRAMEWORK = {
         'rest_framework.permissions.IsAdminUser',
         'rest_framework.permissions.AllowAny',
     ],
+    'DEFAULT_FILTER_BACKENDS': ['django_filters.rest_framework.DjangoFilterBackend'],
     'DEFAULT_PAGINATION_CLASS': 'rest_framework.pagination.LimitOffsetPagination',
     'PAGE_SIZE': 10,  # значение по умолчанию, если не указано в запросе
 }

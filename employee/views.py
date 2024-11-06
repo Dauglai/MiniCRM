@@ -36,6 +36,7 @@ class TaskAPIList(generics.ListAPIView):
     filter_backends = [filters.DjangoFilterBackend]
     filterset_class = TaskFilter
 
+
     def get_queryset(self):
         user = self.request.user
         role = self.request.query_params.get('role', 'author')  # Получаем роль из параметра запроса
@@ -56,6 +57,14 @@ class TaskAPIList(generics.ListAPIView):
             Q(observers=user.profile)
         ).distinct().order_by('id')
 
+
+class TaskAPICreate(generics.CreateAPIView):
+    queryset = Task.objects.all()
+    serializer_class = TaskCreateSerializer
+    permission_classes = (IsAuthenticated,)
+
+    def perform_create(self, serializer):
+        serializer.save(author=self.request.user.profile)
 
 class TaskAPIUpdate(generics.RetrieveUpdateAPIView):
     queryset = Task.objects.all()
