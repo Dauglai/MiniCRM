@@ -1,7 +1,7 @@
 from django.contrib.auth.models import User
 from pkg_resources import require
 from rest_framework import serializers
-from .models import Task, Profile, Comment, Result, Coordination
+from .models import Task, Profile, Comment, Result, Coordination, MentionNotification
 
 
 class UserSerializer(serializers.ModelSerializer):
@@ -26,13 +26,20 @@ class ProfileCreateSerializer(serializers.ModelSerializer):
 class CommentSerializer(serializers.ModelSerializer):
     task_id = serializers.PrimaryKeyRelatedField(queryset=Task.objects.all(), source='task', required=False)
     owner_id = serializers.PrimaryKeyRelatedField(queryset=Profile.objects.all(), source='owner', required=False)
+    mentions = serializers.PrimaryKeyRelatedField(
+        many=True, queryset=Profile.objects.all(), required=False
+    )
+    owner = ProfileSerializer(read_only=True)
     class Meta:
         model = Comment
-        fields = ['task_id', 'owner_id', 'text', 'datetime']
+        fields = ['task_id', 'owner_id', 'text', 'datetime', 'owner', 'mentions']
 
     def create(self, validated_data):
-        # validated_data будет содержать объект Task, так как task_id преобразуется в task
-        return Comment.objects.create(**validated_data)
+        mentions = validated_data.pop('mentions', [])
+        comment = super().create(validated_data)
+        for user in mentions:
+            MentionNotification.objects.create(comment=comment, mentioned_user=user)
+        return comment
 
 
 class ResultSerializer(serializers.ModelSerializer):
@@ -41,11 +48,20 @@ class ResultSerializer(serializers.ModelSerializer):
         model = Result
         fields = '__all__'
 
+    def create(self, validated_data):
+        # validated_data будет содержать объект Task, так как task_id преобразуется в task
+        return Result.objects.create(**validated_data)
+
 class CoordinationSerializer(serializers.ModelSerializer):
-    coordinator = serializers.CurrentUserDefault()
+    task_id = serializers.PrimaryKeyRelatedField(queryset=Task.objects.all(), source='task', required=False)
+    coordinator_id = serializers.PrimaryKeyRelatedField(queryset=Profile.objects.all(), source='coordinator', required=False)
     class Meta:
         model = Coordination
-        fields = ['coordinator', 'is_agreed', 'datetime']
+        fields = ['task_id', 'coordinator_id', 'is_agreed', 'datetime']
+        
+    def create(self, validated_data):
+        # validated_data будет содержать объект Task, так как task_id преобразуется в task
+        return Coordination.objects.create(**validated_data)
 
 class TaskCreateSerializer(serializers.ModelSerializer):
     author = serializers.HiddenField(default=serializers.CurrentUserDefault())

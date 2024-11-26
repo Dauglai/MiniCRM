@@ -56,7 +56,20 @@ class Comment(models.Model):
     task = models.ForeignKey(Task, on_delete=models.CASCADE)
     owner = models.ForeignKey(Profile, on_delete=models.CASCADE)
     text = models.TextField(verbose_name="Комментарий")
+    mentions = models.ManyToManyField(Profile, related_name="mentioned_in_comments", blank=True)
     datetime = models.DateTimeField(verbose_name="Время создания", auto_now=True)
+
+
+class MentionNotification(models.Model):
+    comment = models.ForeignKey(Comment, on_delete=models.CASCADE)
+    mentioned_user = models.ForeignKey(Profile, on_delete=models.CASCADE)
+    is_accepted = models.BooleanField(default=False)
+    is_dismissed = models.BooleanField(default=False)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+
+    def __str__(self):
+        return f"Упоминание {self.mentioned_user} в комментарии {self.comment.id}"
 
 
 class Result(models.Model):

@@ -9,18 +9,24 @@ from rest_framework.response import Response
 from .permissions import *
 from rest_framework.views import APIView
 import datetime
-from django_filters import rest_framework as filters
 from django.db.models import Q
-
+from django_filters import rest_framework as filters
+from .models import Task
 
 class TaskFilter(filters.FilterSet):
     name = filters.CharFilter(field_name='name', lookup_expr='icontains')
     status = filters.CharFilter(field_name='status', lookup_expr='iexact')
     deadline = filters.DateFilter(field_name='deadline')
+    author = filters.NumberFilter(field_name='author__id')  # фильтр по автору
+    addressee = filters.NumberFilter(field_name='addressee__id')  # фильтр по ответственному
+    created_after = filters.DateFilter(field_name='datetime', lookup_expr='gte')  # начальная дата
+    created_before = filters.DateFilter(field_name='datetime', lookup_expr='lte')  # конечная дата
+    task_id = filters.NumberFilter(field_name='id')  # фильтр по ID задачи
 
     class Meta:
         model = Task
-        fields = ['name', 'status', 'deadline']
+        fields = ['name', 'status', 'deadline', 'author', 'addressee', 'created_after', 'created_before', 'task_id']
+
 
 
 class TaskAPIListPagination(pagination.PageNumberPagination):
@@ -41,7 +47,7 @@ class TaskAPIList(generics.ListAPIView):
         user = self.request.user
         role = self.request.query_params.get('role', 'author')  # Получаем роль из параметра запроса
 
-        # Возвращаем задачи, где текущий пользователь - автор или адресат, в зависимости от роли
+        # Возвращаем задачи, где текущий пользователь
         if role == 'addressee':
             return Task.objects.filter(addressee=user.profile).order_by('id')
         if role == 'author':
@@ -86,9 +92,12 @@ class TaskAPIUpdate(generics.RetrieveUpdateAPIView):
 
 
 class ProfileAPIList(generics.ListAPIView):
-    queryset = Profile.objects.all()
     serializer_class = ProfileSerializer
     permission_classes = (IsAuthenticated, )
+
+    def get_queryset(self):
+        # Возвращает профиль текущего пользователя
+        return Profile.objects.filter(author=self.request.user)
 
 
 class ProfileAPICreate(generics.CreateAPIView):
@@ -98,9 +107,13 @@ class ProfileAPICreate(generics.CreateAPIView):
 
 
 class ProfileAPIUpdate(generics.RetrieveUpdateAPIView):
-    queryset = Profile.objects.all()
     serializer_class = ProfileSerializer
     permission_classes = (IsAuthorOrReadOnly,)
+
+    def get_object(self):
+        # Возвращает профиль текущего пользователя
+        return Profile.objects.get(author=self.request.user)
+
 
 class ProfileAPIDestroy(generics.RetrieveDestroyAPIView):
     queryset = Profile.objects.all()
@@ -112,37 +125,6 @@ class ResultAPIList(generics.ListCreateAPIView):
     queryset = Result.objects.all()
     serializer_class = ResultSerializer
     permission_classes = (IsUsersInTaskOrReadOnly,)
-
-
-class ResultAPIUpdate(generics.RetrieveUpdateAPIView):
-    queryset = Result.objects.all()
-    serializer_class = ResultSerializer
-    permission_classes = (IsAuthorOrReadOnly,)
-
-
-class ResultAPIDestroy(generics.RetrieveDestroyAPIView):
-    queryset = Result.objects.all()
-    serializer_class = ResultSerializer
-    permission_classes = (IsAuthorOrReadOnly,)
-
-
-class CommentApiList(generics.ListCreateAPIView):
-    queryset = Comment.objects.all()
-    serializer_class = CommentSerializer
-    permission_classes = (IsUsersInTaskOrReadOnly,)
-
-    def list(self, request, *args, **kwargs):
-        queryset = self.get_queryset()
-        serializer = CommentSerializer(queryset, many=True)
-        return Response(serializer.data)
-
-    def create(self, request, *args, **kwargs):
-        pk = kwargs.get('pk')
-        task = Task.objects.get(pk=pk)
-        serializer = CommentSerializer(data=request.data, context={'request': request})
-        serializer.is_valid(raise_exception=True)
-        serializer.save(task=task.id, datetime=datetime.datetime.now())
-        return Response(serializer.data, status=status.HTTP_201_CREATED)
 
 
 class CommentAPIUpdate(generics.RetrieveUpdateAPIView):
@@ -159,38 +141,74 @@ class CommentApiView(APIView):
 
     @swagger_auto_schema(request_body=CommentSerializer)
     def post(self, request, *args, **kwargs):
-        pk = kwargs.get('pk')
+        pk = kwargs.get('pk')  # ID задачи
         task = Task.objects.get(pk=pk)
         coordinators = task.coordinators.all()
         observers = task.observers.all()
+
         data = request.data.copy()
         data['task_id'] = task.id
-        data['owner_id'] = request.user.id
-        if task.addressee == request.user or task.author == request.user or request.user in coordinators or request.user in observers:
+        data['owner_id'] = request.user.id  # ID профиля владельца
+
+        # Проверяем, имеет ли пользователь доступ к задаче
+        if (
+            task.addressee == request.user.profile or
+            task.author == request.user.profile or
+            request.user.profile in coordinators or
+            request.user.profile in observers
+        ):
+            # Создаем сериализатор
             serializer = CommentSerializer(data=data, context={'request': request})
             serializer.is_valid(raise_exception=True)
-            serializer.save(datetime=datetime.datetime.now())
-            return Response({'message': 'Коментаррий создан'}, status=status.HTTP_201_CREATED)
+            comment = serializer.save(datetime=datetime.datetime.now())
+            # Обрабатываем упоминания
+            if 'mentions' in data:
+                mentions = Profile.objects.filter(id__in=data['mentions'])
+                comment.mentions.set(mentions)
+                # Создаем уведомления для каждого упомянутого пользователя
+                for mentioned_user in mentions:
+                    MentionNotification.objects.create(comment=comment, mentioned_user=mentioned_user)
+            return Response({'message': 'Комментарий создан', 'data': serializer.data}, status=status.HTTP_201_CREATED)
+        # Если доступ запрещен
         return Response({'message': 'Вы не участвуете в работе над этой задачей'}, status=status.HTTP_400_BAD_REQUEST)
 
 
+class MentionNotificationUpdateView(APIView):
+    def post(self, request, notif_id):
+        notif = MentionNotification.objects.get(id=notif_id)
+        action = request.data.get('action')
+
+        if action == 'accept':
+            notif.is_accepted = True
+        elif action == 'dismiss':
+            notif.is_accepted = False
+        notif.is_viewed = True
+        notif.save()
+
+        return Response({'status': 'updated'})
+
 class CoordinationApiView(APIView):
-    def get(self, request):
-        coordination = Coordination.objects.all()
+    def get(self, request, *args, **kwargs):
+        pk = kwargs.get('pk')
+        task = Task.objects.get(pk=pk)
+        coordination = Coordination.objects.filter(task=task)
         return Response(CoordinationSerializer(coordination, many=True).data)
 
     @swagger_auto_schema(request_body=CoordinationSerializer)
-    def post(self, request):
-        pk = request.data['task']
+    def post(self, request, *args, **kwargs):
+        pk = kwargs.get('pk')
         task = Task.objects.get(pk=pk)
         coordination_set = task.coordination_set
         coordinators = task.coordinators.all()
-        if request.user in coordinators:
-            if coordination_set.filter(coordinator=request.user).exists():
+        data = request.data.copy()
+        data['task_id'] = task.id
+        data['coordinator_id'] = request.user.id
+        if request.user.profile in coordinators:
+            if coordination_set.filter(coordinator=request.user.profile).exists():
                 return Response({'message': 'Задача уже была согласована вами'}, status=status.HTTP_400_BAD_REQUEST)
-            serializer = CoordinationSerializer(data=request.data, context={'request': request})
+            serializer = CoordinationSerializer(data=data, context={'request': request})
             serializer.is_valid(raise_exception=True)
-            serializer.save(datetime=datetime.datetime.now(), coordinator=request.user, task=task)
+            serializer.save(datetime=datetime.datetime.now())
             set_count = coordination_set.filter(is_agreed=True).count()
             count = coordinators.count()
             if count == set_count:
