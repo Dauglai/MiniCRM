@@ -1,3 +1,5 @@
+import re
+
 from django.http import HttpResponseRedirect
 from drf_yasg.utils import swagger_auto_schema
 
@@ -12,6 +14,15 @@ import datetime
 from django.db.models import Q
 from django_filters import rest_framework as filters
 from .models import Task
+from rest_framework.filters import SearchFilter
+
+class ProfileSearchAPIView(generics.ListAPIView):
+    queryset = Profile.objects.all()
+    serializer_class = ProfileSerializer
+    permission_classes = [IsAuthenticated]
+    filter_backends = [SearchFilter]
+    search_fields = ['name', 'surname']
+
 
 class TaskFilter(filters.FilterSet):
     name = filters.CharFilter(field_name='name', lookup_expr='icontains')
@@ -115,11 +126,6 @@ class ProfileAPIUpdate(generics.RetrieveUpdateAPIView):
         return Profile.objects.get(author=self.request.user)
 
 
-class ProfileAPIDestroy(generics.RetrieveDestroyAPIView):
-    queryset = Profile.objects.all()
-    serializer_class = ProfileCreateSerializer
-    permission_classes = (IsAuthorOrReadOnly,)
-
 
 class ResultAPIList(generics.ListCreateAPIView):
     queryset = Result.objects.all()
@@ -139,39 +145,55 @@ class CommentApiView(APIView):
         comment = Comment.objects.filter(task=task)
         return Response(CommentSerializer(comment, many=True).data)
 
+
+
     @swagger_auto_schema(request_body=CommentSerializer)
     def post(self, request, *args, **kwargs):
         pk = kwargs.get('pk')  # ID задачи
         task = Task.objects.get(pk=pk)
-        coordinators = task.coordinators.all()
-        observers = task.observers.all()
-
         data = request.data.copy()
         data['task_id'] = task.id
-        data['owner_id'] = request.user.id  # ID профиля владельца
+        data['owner_id'] = request.user.id
 
-        # Проверяем, имеет ли пользователь доступ к задаче
-        if (
-            task.addressee == request.user.profile or
-            task.author == request.user.profile or
-            request.user.profile in coordinators or
-            request.user.profile in observers
-        ):
-            # Создаем сериализатор
+        if self.has_access(request.user.profile, task):
             serializer = CommentSerializer(data=data, context={'request': request})
             serializer.is_valid(raise_exception=True)
             comment = serializer.save(datetime=datetime.datetime.now())
-            # Обрабатываем упоминания
-            if 'mentions' in data:
-                mentions = Profile.objects.filter(id__in=data['mentions'])
-                comment.mentions.set(mentions)
-                # Создаем уведомления для каждого упомянутого пользователя
-                for mentioned_user in mentions:
-                    MentionNotification.objects.create(comment=comment, mentioned_user=mentioned_user)
-            return Response({'message': 'Комментарий создан', 'data': serializer.data}, status=status.HTTP_201_CREATED)
-        # Если доступ запрещен
-        return Response({'message': 'Вы не участвуете в работе над этой задачей'}, status=status.HTTP_400_BAD_REQUEST)
 
+            # Извлечение упоминаний из текста комментария
+            mentions_ids = self.extract_mentions(data.get('text', ''))
+            if mentions_ids:
+                mentions = [user.profile for user in User.objects.filter(id__in=mentions_ids)]
+                comment.mentions.set(mentions)
+
+                # Создание уведомлений для упомянутых пользователей
+                for mentioned_user in mentions:
+                    MentionNotification.objects.create(
+                        comment=comment,
+                        mentioned_user=mentioned_user
+                    )
+
+            return Response({'message': 'Комментарий создан', 'data': serializer.data}, status=status.HTTP_201_CREATED)
+
+        return Response({'message': 'Доступ запрещен'}, status=status.HTTP_400_BAD_REQUEST)
+
+    def has_access(self, profile, task):
+        return (
+                task.addressee == profile or
+                task.author == profile or
+                profile in task.coordinators.all() or
+                profile in task.observers.all()
+        )
+
+    import re
+
+    def extract_mentions(self, text):
+        """
+        Извлекает ID пользователей из строки с упоминаниями в формате @[Имя](ID).
+        """
+        mention_pattern = r"@\[[^\]]+\]\((\d+)\)"
+        matches = re.findall(mention_pattern, text)
+        return [int(match) for match in matches]
 
 class MentionNotificationUpdateView(APIView):
     def post(self, request, notif_id):

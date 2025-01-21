@@ -23,15 +23,13 @@ schema_view = get_schema_view(
 router = routers.SimpleRouter()
 
 
-
-
 urlpatterns = [
     path('admin/', admin.site.urls),
     path('api-auth/', include('rest_framework.urls')),
     path('api/v1/', include(router.urls)),
     path('accounts/profile/', ProfileAPIList.as_view()),
     path('accounts/profile/update/', ProfileAPIUpdate.as_view(), name='profile-update'),
-    path('profile/delete/<int:pk>/', ProfileAPIDestroy.as_view()),
+    path('accounts/search_profiles/', ProfileSearchAPIView.as_view(), name='search-profiles'),
     path('task/', TaskAPIList.as_view()),
     path('task/create/', TaskAPICreate.as_view()),
     path('task/<int:pk>/', TaskAPIUpdate.as_view()),

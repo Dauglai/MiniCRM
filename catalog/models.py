@@ -28,14 +28,17 @@ class Outlet(models.Model):
 
 
 class Client(models.Model):
-    name = models.CharField(max_length=256)
+    surname = models.CharField(verbose_name="Фамилия", max_length=100, db_index=True)
+    name = models.CharField(verbose_name="Имя", max_length=100, db_index=True)
+    patronymic = models.CharField(verbose_name="Отчество", max_length=100, null=True, blank=True, db_index=True)
     address = models.CharField(max_length=1000)
+
     def __str__(self):
         return self.name
 
 class Order(models.Model):
     product = models.ManyToManyField(Product, related_name='orders')
-    outlet = models.OneToOneField(Outlet, on_delete=models.CASCADE, blank=True, null=True)
+    outlet = models.ForeignKey(Outlet, on_delete=models.CASCADE, blank=True, null=True)
     client = models.ForeignKey(Client, on_delete=models.CASCADE, blank=True, null=True)
     description = models.TextField(max_length=1000)
 

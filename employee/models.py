@@ -6,15 +6,15 @@ from catalog.models import Order, Outlet
 
 class Profile(models.Model):
 
-    author = models.OneToOneField(User, on_delete=models.CASCADE, primary_key=True)
-    photo = models.ImageField(blank=True, null=True)
-    surname = models.CharField(verbose_name="Фамилия", max_length=100)
-    name = models.CharField(verbose_name="Имя", max_length=100)
-    patronymic = models.CharField(verbose_name="Отчество", max_length=100, null=True, blank=True)
-    birthday = models.DateField(verbose_name="Дата рождения", null=True, blank=True)
-    role = models.CharField(verbose_name="Название роли", default='Продавец', max_length=100)
-    personal = models.CharField(verbose_name="Личный телефон", max_length=100)
-    work = models.CharField(verbose_name="Рабочий телефон", max_length=100)
+    author = models.OneToOneField(User, on_delete=models.CASCADE, primary_key=True, db_index=True)
+    photo = models.ImageField(blank=True, null=True, db_index=True)
+    surname = models.CharField(verbose_name="Фамилия", max_length=100, db_index=True)
+    name = models.CharField(verbose_name="Имя", max_length=100, db_index=True)
+    patronymic = models.CharField(verbose_name="Отчество", max_length=100, null=True, blank=True, db_index=True)
+    birthday = models.DateField(verbose_name="Дата рождения", null=True, blank=True, db_index=True)
+    role = models.CharField(verbose_name="Название роли", default='Продавец', max_length=100, db_index=True)
+    personal = models.CharField(verbose_name="Личный телефон", max_length=100, db_index=True)
+    work = models.CharField(verbose_name="Рабочий телефон", max_length=100, db_index=True)
 
     def __str__(self):
         return f'{self.surname} {self.name} {self.patronymic}'
