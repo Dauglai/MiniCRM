@@ -1,18 +1,17 @@
 from django.contrib.auth.models import User
 from django.db import models
 
-from catalog.models import Order, Outlet
+from catalog.models import Outlet, Order
 
 
 class Profile(models.Model):
-
     author = models.OneToOneField(User, on_delete=models.CASCADE, primary_key=True, db_index=True)
     photo = models.ImageField(blank=True, null=True, db_index=True)
     surname = models.CharField(verbose_name="Фамилия", max_length=100, db_index=True)
     name = models.CharField(verbose_name="Имя", max_length=100, db_index=True)
     patronymic = models.CharField(verbose_name="Отчество", max_length=100, null=True, blank=True, db_index=True)
     birthday = models.DateField(verbose_name="Дата рождения", null=True, blank=True, db_index=True)
-    role = models.CharField(verbose_name="Название роли", default='Продавец', max_length=100, db_index=True)
+    job = models.CharField(verbose_name="Должность", default='Продавец', max_length=100, db_index=True)
     personal = models.CharField(verbose_name="Личный телефон", max_length=100, db_index=True)
     work = models.CharField(verbose_name="Рабочий телефон", max_length=100, db_index=True)
 
@@ -29,11 +28,11 @@ class Task(models.Model):
         ("Отменена", "Отменена"))
 
     name = models.CharField(verbose_name="Название задачи", max_length=255)
-    order = models.ForeignKey(Order, on_delete=models.CASCADE, null=True, blank=True)
     datetime = models.DateTimeField(verbose_name="Время создания", auto_now=True)
     deadline = models.DateField(verbose_name="Ожидаемый срок выполнения")
     description = models.TextField(verbose_name="Описание", max_length=10000)
     file = models.FileField(verbose_name="Файлы", null=True, blank=True)
+    order = models.ForeignKey(Order, on_delete=models.CASCADE, null=True, blank=True, db_index=True)
     author = models.ForeignKey(Profile, verbose_name="Автор", on_delete=models.CASCADE)
     addressee = models.ForeignKey(Profile, related_name="addressee", on_delete=models.CASCADE)
     status = models.CharField(verbose_name="Название роли", choices=STATUS_CHOISES, default='На согласовании', max_length=100)
@@ -64,7 +63,6 @@ class MentionNotification(models.Model):
     comment = models.ForeignKey(Comment, on_delete=models.CASCADE)
     mentioned_user = models.ForeignKey(Profile, on_delete=models.CASCADE)
     is_accepted = models.BooleanField(default=False)
-    is_dismissed = models.BooleanField(default=False)
     created_at = models.DateTimeField(auto_now_add=True)
 
 
@@ -80,14 +78,17 @@ class Result(models.Model):
     file = models.FileField(verbose_name="Файлы", blank=True, null=True)
 
 class Role(models.Model):
-    ROLE_CHOISES = (
-        ("Собственник", "Собственник"),
-        ("Администратор", "Администратор"),
-        ("Продавец", "Продавец"))
+    Role_CHOISES = (
+        ("Продавец", "Продавец"),
+        ("Администратор", "Администратор"))
 
-    name = models.CharField(verbose_name="Название роли", choices=ROLE_CHOISES, default='Продавец', max_length=100)
-    workers = models.ManyToManyField(Profile, related_name="workers")
-    outlets = models.ManyToManyField(Outlet, related_name="outlets")
+    name = models.CharField(verbose_name="Название роли", choices=Role_CHOISES, default='Продавец', max_length=100)
+    profile = models.ForeignKey(Profile, on_delete=models.CASCADE, related_name="worker")
+    outlet = models.ForeignKey(Outlet, on_delete=models.CASCADE, related_name="outletInfo")
 
     def __str__(self):
-        return self.name
+        return f"{self.profile.name} - {self.name} ({self.outlet.name})"
+
+
+
+

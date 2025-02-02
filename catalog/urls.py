@@ -18,5 +18,9 @@ urlpatterns = [
     path('clients/', ClientAPIListCreate.as_view()),
     path('clients/<int:pk>/', ClientAPIUpdate.as_view()),
     path('clients_delete/<int:pk>/', ClientAPIDestroy.as_view()),
+    path('groups/', GroupAPIListCreate.as_view(), name='group-list-create'),
+    path('groups/<int:pk>/', GroupAPIUpdateDestroy.as_view(), name='group-update-destroy'),
+    path('products/import-export/', ProductImportExportView.as_view(), name='product-import-export'),
+
 
 ]

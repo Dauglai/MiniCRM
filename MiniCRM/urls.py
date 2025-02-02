@@ -4,6 +4,8 @@ from django.conf.urls.static import static
 from drf_yasg.views import get_schema_view
 from drf_yasg import openapi
 from django.conf import settings
+
+import catalog
 from employee.views import *
 from rest_framework import routers, permissions
 
@@ -27,8 +29,10 @@ urlpatterns = [
     path('admin/', admin.site.urls),
     path('api-auth/', include('rest_framework.urls')),
     path('api/v1/', include(router.urls)),
+    path('', include('catalog.urls')),
     path('accounts/profile/', ProfileAPIList.as_view()),
     path('accounts/profile/update/', ProfileAPIUpdate.as_view(), name='profile-update'),
+    path('accounts/profile/<int:pk>/', ProfileAnyAPIUpdate.as_view(), name='profile-update'),
     path('accounts/search_profiles/', ProfileSearchAPIView.as_view(), name='search-profiles'),
     path('task/', TaskAPIList.as_view()),
     path('task/create/', TaskAPICreate.as_view()),
@@ -36,6 +40,8 @@ urlpatterns = [
     path('task/<int:pk>/comments/', CommentApiView.as_view()),
     path('task/<int:pk>/coordination/', CoordinationApiView.as_view()),
     path('task/<int:pk>/result/', ResultAPIList.as_view()),
+    path('roles/', RoleAPIListCreate.as_view(), name='role-list-create'),
+    path('roles/<int:pk>/', RoleAPIUpdateDestroy.as_view(), name='role-update-destroy'),
     re_path(
         r'^swagger(?P<format>\.json|\.yaml)$',
         schema_view.without_ui(cache_timeout=0),

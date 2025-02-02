@@ -1,7 +1,7 @@
 from django.contrib.auth.models import User
 from pkg_resources import require
 from rest_framework import serializers
-from .models import Task, Profile, Comment, Result, Coordination, MentionNotification
+from .models import Task, Profile, Comment, Result, Coordination, MentionNotification, Role
 
 
 class UserSerializer(serializers.ModelSerializer):
@@ -15,7 +15,7 @@ class ProfileSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = Profile
-        fields = ['name', 'surname', 'patronymic', 'work', 'personal', 'role', 'birthday', 'photo', 'author']
+        fields = ['name', 'surname', 'patronymic', 'work', 'personal', 'job', 'birthday', 'photo', 'author']
 
 class ProfileCreateSerializer(serializers.ModelSerializer):
     author = serializers.CurrentUserDefault()
@@ -86,3 +86,11 @@ class TaskSerializer(serializers.ModelSerializer):
         fields = ['id','name', 'datetime', 'deadline', 'description', 'file', 'author', 'addressee', 'status',
                   'observers', 'coordinators', 'observer_set', 'is_agreed', 'coordinator_set', 'coordination_set',
                   'comment_set', 'result_set']
+
+
+class RoleSerializer(serializers.ModelSerializer):
+    worker = ProfileSerializer(read_only=True, source='profile')
+
+    class Meta:
+        model = Role
+        fields = ['id', 'name', 'worker', 'profile', 'outlet']

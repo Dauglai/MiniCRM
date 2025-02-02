@@ -4,7 +4,7 @@ from django.http import HttpResponseRedirect
 from drf_yasg.utils import swagger_auto_schema
 
 from .serializers import *
-from rest_framework.permissions import IsAuthenticatedOrReadOnly, IsAuthenticated
+from rest_framework.permissions import IsAuthenticatedOrReadOnly, IsAuthenticated, IsAdminUser
 from rest_framework import viewsets, generics, permissions, status, pagination
 from .models import Task, Profile, Comment, Result, Coordination
 from rest_framework.response import Response
@@ -28,11 +28,11 @@ class TaskFilter(filters.FilterSet):
     name = filters.CharFilter(field_name='name', lookup_expr='icontains')
     status = filters.CharFilter(field_name='status', lookup_expr='iexact')
     deadline = filters.DateFilter(field_name='deadline')
-    author = filters.NumberFilter(field_name='author__id')  # фильтр по автору
-    addressee = filters.NumberFilter(field_name='addressee__id')  # фильтр по ответственному
-    created_after = filters.DateFilter(field_name='datetime', lookup_expr='gte')  # начальная дата
-    created_before = filters.DateFilter(field_name='datetime', lookup_expr='lte')  # конечная дата
-    task_id = filters.NumberFilter(field_name='id')  # фильтр по ID задачи
+    author = filters.NumberFilter(field_name='author__id')
+    addressee = filters.NumberFilter(field_name='addressee__id')
+    created_after = filters.DateFilter(field_name='datetime', lookup_expr='gte')
+    created_before = filters.DateFilter(field_name='datetime', lookup_expr='lte')
+    task_id = filters.NumberFilter(field_name='id')
 
     class Meta:
         model = Task
@@ -56,9 +56,8 @@ class TaskAPIList(generics.ListAPIView):
 
     def get_queryset(self):
         user = self.request.user
-        role = self.request.query_params.get('role', 'author')  # Получаем роль из параметра запроса
+        role = self.request.query_params.get('role', 'author')
 
-        # Возвращаем задачи, где текущий пользователь
         if role == 'addressee':
             return Task.objects.filter(addressee=user.profile).order_by('id')
         if role == 'author':
@@ -122,9 +121,13 @@ class ProfileAPIUpdate(generics.RetrieveUpdateAPIView):
     permission_classes = (IsAuthorOrReadOnly,)
 
     def get_object(self):
-        # Возвращает профиль текущего пользователя
         return Profile.objects.get(author=self.request.user)
 
+
+class ProfileAnyAPIUpdate(generics.RetrieveUpdateDestroyAPIView):
+    queryset = Profile.objects.all()
+    serializer_class = ProfileSerializer
+    permission_classes = (IsAdminUser,)
 
 
 class ResultAPIList(generics.ListCreateAPIView):
@@ -149,7 +152,7 @@ class CommentApiView(APIView):
 
     @swagger_auto_schema(request_body=CommentSerializer)
     def post(self, request, *args, **kwargs):
-        pk = kwargs.get('pk')  # ID задачи
+        pk = kwargs.get('pk')
         task = Task.objects.get(pk=pk)
         data = request.data.copy()
         data['task_id'] = task.id
@@ -238,5 +241,17 @@ class CoordinationApiView(APIView):
                 task.save()
             return Response({'message': 'Задача соглосованна.'}, status=status.HTTP_201_CREATED)
         return Response({'message': 'Вас нет в списке соглосователей.'}, status=status.HTTP_400_BAD_REQUEST)
+
+
+class RoleAPIListCreate(generics.ListCreateAPIView):
+    queryset = Role.objects.all()
+    serializer_class = RoleSerializer
+    permission_classes = (IsAuthenticated,)
+
+
+class RoleAPIUpdateDestroy(generics.RetrieveUpdateDestroyAPIView):
+    queryset = Role.objects.all()
+    serializer_class = RoleSerializer
+    permission_classes = (IsAuthenticated,)
 
 
