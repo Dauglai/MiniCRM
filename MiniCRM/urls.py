@@ -42,6 +42,7 @@ urlpatterns = [
     path('task/<int:pk>/result/', ResultAPIList.as_view()),
     path('roles/', RoleAPIListCreate.as_view(), name='role-list-create'),
     path('roles/<int:pk>/', RoleAPIUpdateDestroy.as_view(), name='role-update-destroy'),
+    path('task/<int:pk>/progress/', ProgressListApi.as_view(), name='progress-task'),
     re_path(
         r'^swagger(?P<format>\.json|\.yaml)$',
         schema_view.without_ui(cache_timeout=0),

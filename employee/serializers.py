@@ -1,7 +1,7 @@
 from django.contrib.auth.models import User
 from pkg_resources import require
 from rest_framework import serializers
-from .models import Task, Profile, Comment, Result, Coordination, MentionNotification, Role
+from .models import Task, Profile, Comment, Result, Coordination, MentionNotification, Role, Progress
 
 
 class UserSerializer(serializers.ModelSerializer):
@@ -26,20 +26,12 @@ class ProfileCreateSerializer(serializers.ModelSerializer):
 class CommentSerializer(serializers.ModelSerializer):
     task_id = serializers.PrimaryKeyRelatedField(queryset=Task.objects.all(), source='task', required=False)
     owner_id = serializers.PrimaryKeyRelatedField(queryset=Profile.objects.all(), source='owner', required=False)
-    mentions = serializers.PrimaryKeyRelatedField(
-        many=True, queryset=Profile.objects.all(), required=False
-    )
+    recipient_id = serializers.PrimaryKeyRelatedField(queryset=Profile.objects.all(), source='recipient', required=False, allow_null=True)
     owner = ProfileSerializer(read_only=True)
+    recipient = ProfileSerializer(read_only=True)
     class Meta:
         model = Comment
-        fields = ['task_id', 'owner_id', 'text', 'datetime', 'owner', 'mentions']
-
-    def create(self, validated_data):
-        mentions = validated_data.pop('mentions', [])
-        comment = super().create(validated_data)
-        for user in mentions:
-            MentionNotification.objects.create(comment=comment, mentioned_user=user)
-        return comment
+        fields = ['task_id', 'owner_id','recipient_id', 'text', 'datetime', 'owner', 'recipient']
 
 
 class ResultSerializer(serializers.ModelSerializer):
@@ -55,9 +47,10 @@ class ResultSerializer(serializers.ModelSerializer):
 class CoordinationSerializer(serializers.ModelSerializer):
     task_id = serializers.PrimaryKeyRelatedField(queryset=Task.objects.all(), source='task', required=False)
     coordinator_id = serializers.PrimaryKeyRelatedField(queryset=Profile.objects.all(), source='coordinator', required=False)
+    coordinator = ProfileSerializer(read_only=True)
     class Meta:
         model = Coordination
-        fields = ['task_id', 'coordinator_id', 'is_agreed', 'datetime']
+        fields = ['task_id', 'coordinator_id', 'is_agreed', 'datetime', 'coordinator']
         
     def create(self, validated_data):
         # validated_data будет содержать объект Task, так как task_id преобразуется в task
@@ -65,7 +58,7 @@ class CoordinationSerializer(serializers.ModelSerializer):
 
 class TaskCreateSerializer(serializers.ModelSerializer):
     author = serializers.HiddenField(default=serializers.CurrentUserDefault())
-    file = serializers.FileField(required=False)
+    file = serializers.FileField(required=False, allow_null=True)
 
     class Meta:
         model = Task
@@ -78,14 +71,14 @@ class TaskSerializer(serializers.ModelSerializer):
     addressee = ProfileSerializer(read_only=True)
     coordination_set = CoordinationSerializer(many=True, read_only=True)
     comment_set = CommentSerializer(many=True, read_only=True)
-    result_set = ResultSerializer(many=True, read_only=True)
+    result = ResultSerializer(read_only=True)
     observer_set = ProfileSerializer(many=True, read_only=True, source='observers')
     coordinator_set = ProfileSerializer(many=True, read_only=True, source='coordinators')
     class Meta:
         model = Task
         fields = ['id','name', 'datetime', 'deadline', 'description', 'file', 'author', 'addressee', 'status',
                   'observers', 'coordinators', 'observer_set', 'is_agreed', 'coordinator_set', 'coordination_set',
-                  'comment_set', 'result_set']
+                  'comment_set', 'result']
 
 
 class RoleSerializer(serializers.ModelSerializer):
@@ -94,3 +87,18 @@ class RoleSerializer(serializers.ModelSerializer):
     class Meta:
         model = Role
         fields = ['id', 'name', 'worker', 'profile', 'outlet']
+
+
+class ProgressSerializer(serializers.ModelSerializer):
+
+    author = ProfileSerializer(read_only=True)
+    class Meta:
+        model = Progress
+        fields = ['id', 'task', 'datetime', 'author', 'record']
+
+class MentionNotificationSerializer(serializers.ModelSerializer):
+
+    author = ProfileSerializer(read_only=True)
+    class Meta:
+        model = Progress
+        fields = '__all__'

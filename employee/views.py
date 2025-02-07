@@ -2,11 +2,12 @@ import re
 
 from django.http import HttpResponseRedirect
 from drf_yasg.utils import swagger_auto_schema
+from rest_framework.parsers import MultiPartParser, FormParser
 
 from .serializers import *
 from rest_framework.permissions import IsAuthenticatedOrReadOnly, IsAuthenticated, IsAdminUser
 from rest_framework import viewsets, generics, permissions, status, pagination
-from .models import Task, Profile, Comment, Result, Coordination
+from .models import Task, Profile, Comment, Result, Coordination, Progress
 from rest_framework.response import Response
 from .permissions import *
 from rest_framework.views import APIView
@@ -21,7 +22,7 @@ class ProfileSearchAPIView(generics.ListAPIView):
     serializer_class = ProfileSerializer
     permission_classes = [IsAuthenticated]
     filter_backends = [SearchFilter]
-    search_fields = ['name', 'surname']
+    search_fields = ['name', 'surname', 'status', 'id', 'author__surname', 'addressee__surname']
 
 
 class TaskFilter(filters.FilterSet):
@@ -78,6 +79,7 @@ class TaskAPICreate(generics.CreateAPIView):
     queryset = Task.objects.all()
     serializer_class = TaskCreateSerializer
     permission_classes = (IsAuthenticated,)
+    parser_classes = (MultiPartParser, FormParser)
 
     def perform_create(self, serializer):
         serializer.save(author=self.request.user.profile)
@@ -86,19 +88,34 @@ class TaskAPIUpdate(generics.RetrieveUpdateAPIView):
     queryset = Task.objects.all()
     serializer_class = TaskSerializer
     permission_classes = (IsAuthorOrReadOnly,)
+    http_method_names = ['get', 'put', 'patch']
+
 
     def retrieve(self, request, pk):
         task = Task.objects.get(pk=pk)
         serializer = TaskSerializer(task)
         return Response(serializer.data)
 
-    def update(self, request, pk):
+    def update(self, request, pk, partial=False):
         task = Task.objects.get(pk=pk)
-        serializer = TaskSerializer(task, data=request.data, context={'request': request})
+        serializer = TaskSerializer(task, data=request.data, partial=partial, context={'request': request})
         serializer.is_valid(raise_exception=True)
-        task.coordination_set.all().delete()
-        serializer.save(datetime=datetime.datetime.now(), status="На согласовании")
-        return HttpResponseRedirect(redirect_to='/tasks/', status=status.HTTP_303_SEE_OTHER)
+
+        is_agreed = request.data.get('is_agreed', None)
+
+        if task.status == "Отменена":
+            task.coordination_set.all().delete()
+            serializer.save(datetime=datetime.datetime.now(), status="На согласовании")
+            Progress.objects.create(task=task, author=request.user.profile, record="Рассмотрение")
+        elif task.status == "Выполнена" and is_agreed:
+            serializer.save(datetime=datetime.datetime.now(), status="Завершена")
+            Progress.objects.create(task=task, author=request.user.profile, record="Завершение")
+        else:
+            serializer.save(datetime=datetime.datetime.now())
+
+        Progress.objects.create(task=task, author=request.user.profile, record="Изменение задачи")
+
+        return Response({'message': 'Принято', 'data': serializer.data}, status=status.HTTP_201_CREATED)
 
 
 class ProfileAPIList(generics.ListAPIView):
@@ -130,28 +147,26 @@ class ProfileAnyAPIUpdate(generics.RetrieveUpdateDestroyAPIView):
     permission_classes = (IsAdminUser,)
 
 
-class ResultAPIList(generics.ListCreateAPIView):
-    queryset = Result.objects.all()
-    serializer_class = ResultSerializer
-    permission_classes = (IsUsersInTaskOrReadOnly,)
-
-
 class CommentAPIUpdate(generics.RetrieveUpdateAPIView):
     queryset = Comment.objects.all()
     serializer_class = CommentSerializer
     permission_classes = (IsOwnerOrReadOnly,)
 
 class CommentApiView(APIView):
-    def get(self, request, *args, **kwargs):
+    def get(self, request,*args, **kwargs):
         pk = kwargs.get('pk')
         task = Task.objects.get(pk=pk)
-        comment = Comment.objects.filter(task=task)
-        return Response(CommentSerializer(comment, many=True).data)
+        comments = Comment.objects.filter(task=task).filter(
+            Q(recipient__isnull=True) | Q(recipient=request.user.profile) | Q(owner=request.user.profile))
+
+        serializer = CommentSerializer(comments, many=True)
+        return Response(serializer.data)
 
 
 
     @swagger_auto_schema(request_body=CommentSerializer)
     def post(self, request, *args, **kwargs):
+        print("Полученные данные:", request.data)
         pk = kwargs.get('pk')
         task = Task.objects.get(pk=pk)
         data = request.data.copy()
@@ -161,24 +176,14 @@ class CommentApiView(APIView):
         if self.has_access(request.user.profile, task):
             serializer = CommentSerializer(data=data, context={'request': request})
             serializer.is_valid(raise_exception=True)
+            print("Валидные данные:", serializer.validated_data)  # Должен быть recipient_id
             comment = serializer.save(datetime=datetime.datetime.now())
-
-            # Извлечение упоминаний из текста комментария
-            mentions_ids = self.extract_mentions(data.get('text', ''))
-            if mentions_ids:
-                mentions = [user.profile for user in User.objects.filter(id__in=mentions_ids)]
-                comment.mentions.set(mentions)
-
-                # Создание уведомлений для упомянутых пользователей
-                for mentioned_user in mentions:
-                    MentionNotification.objects.create(
-                        comment=comment,
-                        mentioned_user=mentioned_user
-                    )
+            if comment.recipient:
+                MentionNotification.objects.create(mentioned_user=comment.recipient, comment=comment)
 
             return Response({'message': 'Комментарий создан', 'data': serializer.data}, status=status.HTTP_201_CREATED)
 
-        return Response({'message': 'Доступ запрещен'}, status=status.HTTP_400_BAD_REQUEST)
+        return Response({'message': 'Доступ запрещен'}, status=status.HTTP_204_NO_CONTENT)
 
     def has_access(self, profile, task):
         return (
@@ -188,15 +193,6 @@ class CommentApiView(APIView):
                 profile in task.observers.all()
         )
 
-    import re
-
-    def extract_mentions(self, text):
-        """
-        Извлекает ID пользователей из строки с упоминаниями в формате @[Имя](ID).
-        """
-        mention_pattern = r"@\[[^\]]+\]\((\d+)\)"
-        matches = re.findall(mention_pattern, text)
-        return [int(match) for match in matches]
 
 class MentionNotificationUpdateView(APIView):
     def post(self, request, notif_id):
@@ -228,6 +224,7 @@ class CoordinationApiView(APIView):
         data = request.data.copy()
         data['task_id'] = task.id
         data['coordinator_id'] = request.user.id
+        is_agreed = data['is_agreed']
         if request.user.profile in coordinators:
             if coordination_set.filter(coordinator=request.user.profile).exists():
                 return Response({'message': 'Задача уже была согласована вами'}, status=status.HTTP_400_BAD_REQUEST)
@@ -236,6 +233,10 @@ class CoordinationApiView(APIView):
             serializer.save(datetime=datetime.datetime.now())
             set_count = coordination_set.filter(is_agreed=True).count()
             count = coordinators.count()
+            Progress.objects.create(task=task, author=request.user.profile, record="Согласование")
+            if is_agreed == False:
+                task.status = "Отменена"
+                task.save()
             if count == set_count:
                 task.status = "В работе"
                 task.save()
@@ -255,3 +256,50 @@ class RoleAPIUpdateDestroy(generics.RetrieveUpdateDestroyAPIView):
     permission_classes = (IsAuthenticated,)
 
 
+class ProgressListApi(APIView):
+    def get(self, request, *args, **kwargs):
+        pk = kwargs.get('pk')
+        task = Task.objects.get(pk=pk)
+        progress = Progress.objects.filter(task=task)
+        return Response(ProgressSerializer(progress, many=True).data)
+
+
+class ResultAPIList(APIView):
+    def get(self, request, *args, **kwargs):
+        pk = kwargs.get('pk')
+        task = Task.objects.get(pk=pk)
+        progress = Result.objects.filter(task=task)
+        return Response(ResultSerializer(progress, many=True).data)
+
+    def post(self, request, *args, **kwargs):
+        pk = kwargs.get('pk')
+        task = Task.objects.get(pk=pk)
+        data = request.data.copy()
+        if task.addressee == request.user.profile:
+            serializer = ResultSerializer(data=data, context={'request': request})
+            serializer.is_valid(raise_exception=True)
+            serializer.save()
+            Progress.objects.create(task=task, author=request.user.profile, record="Реузльтат")
+            task.status = "Выполнена"
+            task.save()
+            return Response({'message': 'Резульат предоставлен.'}, status=status.HTTP_201_CREATED)
+        return Response({'message': 'Вас нет в списке соглосователей.'}, status=status.HTTP_400_BAD_REQUEST)
+
+    def put(self, request, *args, **kwargs):
+        pk = kwargs.get('pk')
+        task = Task.objects.get(pk=pk)
+        try:
+            result = Result.objects.get(task=task)
+        except Result.DoesNotExist:
+            return Response({'message': 'Результат не найден'}, status=status.HTTP_404_NOT_FOUND)
+
+        if task.adresse == request.user.profile:
+            serializer = ResultSerializer(result, data=request.data, partial=True, context={'request': request})
+            serializer.is_valid(raise_exception=True)
+            serializer.save()
+            task.status = "Выполнена"
+            task.save()
+            Progress.objects.create(task=task, author=request.user.profile, record="Результат обновлен")
+            return Response({'message': 'Результат обновлен.', 'data': serializer.data}, status=status.HTTP_200_OK)
+
+        return Response({'message': 'Вы не можете изменить результат.'}, status=status.HTTP_403_FORBIDDEN)

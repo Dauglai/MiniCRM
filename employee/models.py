@@ -31,7 +31,7 @@ class Task(models.Model):
     datetime = models.DateTimeField(verbose_name="Время создания", auto_now=True)
     deadline = models.DateField(verbose_name="Ожидаемый срок выполнения")
     description = models.TextField(verbose_name="Описание", max_length=10000)
-    file = models.FileField(verbose_name="Файлы", null=True, blank=True)
+    file = models.FileField(verbose_name="Файлы", blank=True, upload_to="tasks/")
     order = models.ForeignKey(Order, on_delete=models.CASCADE, null=True, blank=True, db_index=True)
     author = models.ForeignKey(Profile, verbose_name="Автор", on_delete=models.CASCADE)
     addressee = models.ForeignKey(Profile, related_name="addressee", on_delete=models.CASCADE)
@@ -55,7 +55,8 @@ class Comment(models.Model):
     task = models.ForeignKey(Task, on_delete=models.CASCADE)
     owner = models.ForeignKey(Profile, on_delete=models.CASCADE)
     text = models.TextField(verbose_name="Комментарий")
-    mentions = models.ManyToManyField(Profile, related_name="mentioned_in_comments", blank=True)
+    recipient = models.ForeignKey(Profile, on_delete=models.CASCADE, null=True, blank=True,
+                                  related_name="private_comments")  # Поле для приватных комментариев
     datetime = models.DateTimeField(verbose_name="Время создания", auto_now=True)
 
 
@@ -89,6 +90,20 @@ class Role(models.Model):
     def __str__(self):
         return f"{self.profile.name} - {self.name} ({self.outlet.name})"
 
+
+class Progress(models.Model):
+    RECORD_CHOISES = (
+        ("Соглосование", "Задача соглосована"),
+        ("Результат", "Реузльтат предоставлен"),
+        ("Рассмотрение", "Задача изменена и подана на рассмотрение"),
+        ("Завершение", "Задача завершена"),
+    )
+
+
+    task = models.ForeignKey(Task, on_delete=models.CASCADE)
+    author = models.ForeignKey(Profile, on_delete=models.CASCADE)
+    record = models.CharField(verbose_name="Запись", choices=RECORD_CHOISES, max_length=100)
+    datetime = models.DateTimeField(auto_now_add=True)
 
 
 
