@@ -23,14 +23,15 @@ schema_view = get_schema_view(
 )
 
 router = routers.SimpleRouter()
-
+router.register(r'notifications', MentionNotificationViewSet, basename='notifications')
 
 urlpatterns = [
     path('admin/', admin.site.urls),
     path('api-auth/', include('rest_framework.urls')),
-    path('api/v1/', include(router.urls)),
+    path('api/', include(router.urls)),
     path('', include('catalog.urls')),
     path('accounts/profile/', ProfileAPIList.as_view()),
+    path('accounts/create_profile/', ProfileAPICreate.as_view(), name='create-profile'),
     path('accounts/profile/update/', ProfileAPIUpdate.as_view(), name='profile-update'),
     path('accounts/profile/<int:pk>/', ProfileAnyAPIUpdate.as_view(), name='profile-update'),
     path('accounts/search_profiles/', ProfileSearchAPIView.as_view(), name='search-profiles'),

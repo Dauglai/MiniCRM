@@ -5,6 +5,9 @@ from rest_framework.response import Response
 from rest_framework.views import APIView
 from rest_framework.parsers import MultiPartParser, FormParser
 from django.http import HttpResponse
+from openpyxl.styles import Font, Alignment, PatternFill, Border, Side
+from django.http import HttpResponse
+import openpyxl
 
 from employee.permissions import IsAuthorOrReadOnly
 from .models import Product, Group
@@ -94,41 +97,60 @@ class ProductImportExportView(APIView):
     parser_classes = (MultiPartParser, FormParser)
 
     def post(self, request):
-        """Импорт продуктов из Excel файла"""
+        """Импорт и обновление продуктов из Excel файла"""
         file = request.FILES.get('file')
         if not file:
             return Response({"error": "Файл не предоставлен"}, status=status.HTTP_400_BAD_REQUEST)
-
         try:
             workbook = openpyxl.load_workbook(file)
             sheet = workbook.active
-
             for row in sheet.iter_rows(min_row=2, values_only=True):
                 group_name, name, price, count, article, description = row
                 group, _ = Group.objects.get_or_create(name=group_name)
-                Product.objects.create(
+                product, created = Product.objects.update_or_create(
                     article=article,
-                    group=group,
-                    name=name,
-                    price=price,
-                    count=count,
-                    description=description
+                    defaults={
+                        "group": group,
+                        "name": name,
+                        "price": price,
+                        "count": count,
+                        "description": description,
+                    }
                 )
 
-            return Response({"message": "Продукты успешно импортированы"}, status=status.HTTP_200_OK)
+            return Response({"message": "Продукты успешно импортированы/обновлены"}, status=status.HTTP_200_OK)
+
         except Exception as e:
             return Response({"error": str(e)}, status=status.HTTP_400_BAD_REQUEST)
 
-
-
     def get(self, request):
-        """Экспорт продуктов в Excel файл"""
+        """Экспорт продуктов в стилизованный Excel-файл"""
         workbook = openpyxl.Workbook()
         sheet = workbook.active
-        sheet.append(["Группа", "Название", "Цена", "Количество", "Артикул", "Описание"])
+        sheet.title = "Продукты"
 
+        # Определяем стили
+        header_font = Font(bold=True, color="FFFFFF")  # Белый текст
+        header_fill = PatternFill(start_color="007bff", end_color="007bff", fill_type="solid")  # Синий фон
+        center_alignment = Alignment(horizontal="center", vertical="center")  # Выравнивание по центру
+        border = Border(left=Side(style="thin"), right=Side(style="thin"), top=Side(style="thin"),
+                        bottom=Side(style="thin"))
+
+        # Заголовки
+        headers = ["Группа", "Название", "Цена", "Количество", "Артикул", "Описание"]
+        sheet.append(headers)
+
+        # Применяем стили к заголовкам
+        for col_num, header in enumerate(headers, 1):
+            cell = sheet.cell(row=1, column=col_num, value=header)
+            cell.font = header_font
+            cell.fill = header_fill
+            cell.alignment = center_alignment
+            cell.border = border
+
+        # Данные из базы
         products = Product.objects.select_related('group').all()
-        for product in products:
+        for row_num, product in enumerate(products, start=2):
             sheet.append([
                 product.group.name,
                 product.name,
@@ -138,11 +160,34 @@ class ProductImportExportView(APIView):
                 product.description,
             ])
 
+            # Чередование цветов строк (серый фон для четных строк)
+            if row_num % 2 == 0:
+                fill = PatternFill(start_color="f2f2f2", end_color="f2f2f2", fill_type="solid")
+                for col_num in range(1, len(headers) + 1):
+                    sheet.cell(row=row_num, column=col_num).fill = fill
+
+            # Форматируем числовые значения
+            sheet.cell(row=row_num, column=3).number_format = '#,##0.00'  # Цена
+            sheet.cell(row=row_num, column=4).number_format = '0'  # Количество
+
+        # Автоширина колонок
+        for col in sheet.columns:
+            max_length = 0
+            col_letter = col[0].column_letter  # Получаем букву колонки
+            for cell in col:
+                try:
+                    if cell.value:
+                        max_length = max(max_length, len(str(cell.value)))
+                except:
+                    pass
+            sheet.column_dimensions[col_letter].width = max_length + 2
+
+        # Создаем HTTP-ответ с файлом Excel
         response = HttpResponse(
             content_type='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
         )
         response['Content-Disposition'] = 'attachment; filename=products.xlsx'
 
-        # Save workbook to response
-        workbook.save(response)  # Important: Save workbook directly to the HttpResponse object
+        # Сохраняем книгу в ответ
+        workbook.save(response)
         return response

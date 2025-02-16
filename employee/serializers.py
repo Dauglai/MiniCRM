@@ -2,7 +2,19 @@ from django.contrib.auth.models import User
 from pkg_resources import require
 from rest_framework import serializers
 from .models import Task, Profile, Comment, Result, Coordination, MentionNotification, Role, Progress
+from django.core.mail import send_mail
+from django.conf import settings
+import random
+import string
+from django.core.exceptions import ObjectDoesNotExist
 
+def send_password_email(email, password):
+    """Функция отправки сгенерированного пароля на почту пользователя"""
+    subject = "Ваш аккаунт создан"
+    message = f"Здравствуйте!\n\nВаш аккаунт был успешно создан.\nВаш пароль: {password}\n\nПожалуйста, измените его при первой возможности."
+    from_email = settings.DEFAULT_FROM_EMAIL
+    recipient_list = [email]
+    send_mail(subject, message, from_email, recipient_list)
 
 class UserSerializer(serializers.ModelSerializer):
     class Meta:
@@ -11,17 +23,74 @@ class UserSerializer(serializers.ModelSerializer):
 
 
 class ProfileSerializer(serializers.ModelSerializer):
+    email = serializers.EmailField(source="user.email", required=False)
+    password = serializers.CharField(write_only=True, required=False)
     author = UserSerializer(read_only=True)
 
     class Meta:
         model = Profile
-        fields = ['name', 'surname', 'patronymic', 'work', 'personal', 'job', 'birthday', 'photo', 'author']
+        fields = ['author', "name", "surname", "patronymic", "birthday", "work", "job", "personal", "photo", "email", "password"]
+
+    def update(self, instance, validated_data):
+        user_data = validated_data.pop("user", {})
+        email = user_data.get("email")
+        password = validated_data.pop("password", None)
+
+        if email:
+            instance.user.email = email
+            instance.user.save()
+
+        if password:
+            instance.user.set_password(password)
+            instance.user.save()
+
+        if "photo" in validated_data:
+            instance.photo = validated_data["photo"]
+
+        return super().update(instance, validated_data)
+
+def generate_password():
+    """Генерация случайного пароля из 12 символов"""
+    characters = string.ascii_letters + string.digits + string.punctuation
+    return ''.join(random.choice(characters) for _ in range(12))
+
 
 class ProfileCreateSerializer(serializers.ModelSerializer):
-    author = serializers.CurrentUserDefault()
+    email = serializers.EmailField(write_only=True)
+    password = serializers.CharField(write_only=True, required=False)
+    phone = serializers.CharField()
+
     class Meta:
         model = Profile
-        fields = '__all__'
+        fields = ['author', 'email', 'password', 'name', 'surname', 'phone']
+        extra_kwargs = {'author': {'required': False}}  # Чтобы избежать ошибки валидации
+
+    def create(self, validated_data):
+        email = validated_data.pop("email")
+        password = validated_data.pop("password", generate_password())
+        name =  validated_data.pop("name")
+        surname =  validated_data.pop("surname")
+        phone = validated_data.pop("phone")
+
+        # Проверяем, существует ли уже пользователь
+        user, created = User.objects.get_or_create(
+            username=email,
+            defaults={"email": email, "password": password, "first_name": name, "last_name": surname}
+        )
+
+        if not created:
+            raise serializers.ValidationError({"email": "Пользователь с таким email уже существует."})
+
+        # Создаем или обновляем профиль
+        profile, created = Profile.objects.get_or_create(author=user, defaults={"phone": phone, "name": name, "surname": surname})
+        if not created:
+            profile.phone = phone
+            profile.name = name
+            profile.surname = surname
+            profile.save()
+
+        # send_password_email(email, password)
+        return profile
 
 class CommentSerializer(serializers.ModelSerializer):
     task_id = serializers.PrimaryKeyRelatedField(queryset=Task.objects.all(), source='task', required=False)
@@ -96,9 +165,13 @@ class ProgressSerializer(serializers.ModelSerializer):
         model = Progress
         fields = ['id', 'task', 'datetime', 'author', 'record']
 
-class MentionNotificationSerializer(serializers.ModelSerializer):
+from rest_framework import serializers
+from .models import MentionNotification
 
-    author = ProfileSerializer(read_only=True)
+class MentionNotificationSerializer(serializers.ModelSerializer):
+    comment_text = serializers.CharField(source="comment.text", read_only=True)
+    task_id = serializers.IntegerField(source="comment.task.id", read_only=True)
+
     class Meta:
-        model = Progress
-        fields = '__all__'
+        model = MentionNotification
+        fields = ['id', 'comment_text', 'task_id', 'is_accepted', 'created_at']

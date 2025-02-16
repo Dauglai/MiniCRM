@@ -1,9 +1,8 @@
 import re
-
 from django.http import HttpResponseRedirect
+from django_filters.rest_framework import DjangoFilterBackend
 from drf_yasg.utils import swagger_auto_schema
 from rest_framework.parsers import MultiPartParser, FormParser
-
 from .serializers import *
 from rest_framework.permissions import IsAuthenticatedOrReadOnly, IsAuthenticated, IsAdminUser
 from rest_framework import viewsets, generics, permissions, status, pagination
@@ -16,6 +15,7 @@ from django.db.models import Q
 from django_filters import rest_framework as filters
 from .models import Task
 from rest_framework.filters import SearchFilter
+
 
 class ProfileSearchAPIView(generics.ListAPIView):
     queryset = Profile.objects.all()
@@ -131,6 +131,9 @@ class ProfileAPICreate(generics.CreateAPIView):
     queryset = Profile.objects.all()
     serializer_class = ProfileCreateSerializer
     permission_classes = (IsAuthenticated, )
+
+    def perform_create(self, serializer):
+        serializer.save(author=self.request.user.profile)
 
 
 class ProfileAPIUpdate(generics.RetrieveUpdateAPIView):
@@ -248,6 +251,8 @@ class RoleAPIListCreate(generics.ListCreateAPIView):
     queryset = Role.objects.all()
     serializer_class = RoleSerializer
     permission_classes = (IsAuthenticated,)
+    filter_backends = [DjangoFilterBackend]
+    filterset_fields = ['outlet']
 
 
 class RoleAPIUpdateDestroy(generics.RetrieveUpdateDestroyAPIView):
@@ -303,3 +308,17 @@ class ResultAPIList(APIView):
             return Response({'message': 'Результат обновлен.', 'data': serializer.data}, status=status.HTTP_200_OK)
 
         return Response({'message': 'Вы не можете изменить результат.'}, status=status.HTTP_403_FORBIDDEN)
+
+
+class MentionNotificationViewSet(viewsets.ModelViewSet):
+    serializer_class = MentionNotificationSerializer
+    permission_classes = [IsAuthenticated]
+
+    def get_queryset(self):
+        return MentionNotification.objects.filter(mentioned_user=self.request.user.profile, is_accepted=False)
+
+    def update(self, request, *args, **kwargs):
+        instance = self.get_object()
+        instance.is_accepted = True
+        instance.save()
+        return Response({"message": "Уведомление помечено как прочитанное"}, status=status.HTTP_200_OK)
