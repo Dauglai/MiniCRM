@@ -1,6 +1,10 @@
 from django.contrib.auth.models import User
 from pkg_resources import require
 from rest_framework import serializers
+
+from catalog.models import Order
+from catalog.serializers import OrderSerializer
+from .consumers import online_users
 from .models import Task, Profile, Comment, Result, Coordination, MentionNotification, Role, Progress
 from django.core.mail import send_mail
 from django.conf import settings
@@ -26,10 +30,14 @@ class ProfileSerializer(serializers.ModelSerializer):
     email = serializers.EmailField(source="user.email", required=False)
     password = serializers.CharField(write_only=True, required=False)
     author = UserSerializer(read_only=True)
+    status = serializers.SerializerMethodField()
 
     class Meta:
         model = Profile
-        fields = ['author', "name", "surname", "patronymic", "birthday", "work", "job", "personal", "photo", "email", "password"]
+        fields = ['author', "name", "surname", "patronymic", "birthday", "work", "job", "personal", "photo", "email", "password", "status"]
+
+    def get_status(self, obj):
+        return "online" if obj.author.id in online_users else "offline"
 
     def update(self, instance, validated_data):
         user_data = validated_data.pop("user", {})
@@ -47,7 +55,10 @@ class ProfileSerializer(serializers.ModelSerializer):
         if "photo" in validated_data:
             instance.photo = validated_data["photo"]
 
-        return super().update(instance, validated_data)
+        for attr, value in validated_data.items():
+            setattr(instance, attr, value)
+        instance.save()
+        return instance
 
 def generate_password():
     """Генерация случайного пароля из 12 символов"""
@@ -128,10 +139,11 @@ class CoordinationSerializer(serializers.ModelSerializer):
 class TaskCreateSerializer(serializers.ModelSerializer):
     author = serializers.HiddenField(default=serializers.CurrentUserDefault())
     file = serializers.FileField(required=False, allow_null=True)
+    order = serializers.PrimaryKeyRelatedField(queryset=Order.objects.all(), required=False, allow_null=True)
 
     class Meta:
         model = Task
-        fields = ['id','author', 'name', 'deadline', 'description', 'file', 'addressee', 'observers', 'coordinators']
+        fields = ['id','author', 'name', 'deadline', 'description', 'file', 'addressee', 'observers', 'coordinators', 'order']
 
 
 
@@ -152,7 +164,6 @@ class TaskSerializer(serializers.ModelSerializer):
 
 class RoleSerializer(serializers.ModelSerializer):
     worker = ProfileSerializer(read_only=True, source='profile')
-
     class Meta:
         model = Role
         fields = ['id', 'name', 'worker', 'profile', 'outlet']

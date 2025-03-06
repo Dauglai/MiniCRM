@@ -15,6 +15,21 @@ from django.db.models import Q
 from django_filters import rest_framework as filters
 from .models import Task
 from rest_framework.filters import SearchFilter
+from rest_framework.response import Response
+from rest_framework.decorators import api_view
+from django.contrib.auth import get_user_model
+from .consumers import online_users
+
+User = get_user_model()
+
+@api_view(["GET"])
+def get_online_status(request):
+    users = User.objects.all()
+    data = [
+        {"id": user.id, "name": user.get_full_name(), "status": "online" if user.id in online_users else "offline"}
+        for user in users
+    ]
+    return Response(data)
 
 
 class ProfileSearchAPIView(generics.ListAPIView):
@@ -22,7 +37,7 @@ class ProfileSearchAPIView(generics.ListAPIView):
     serializer_class = ProfileSerializer
     permission_classes = [IsAuthenticated]
     filter_backends = [SearchFilter]
-    search_fields = ['name', 'surname', 'status', 'id', 'author__surname', 'addressee__surname']
+    search_fields = ['name', 'surname', 'status', 'id', 'author__surname', 'addressee__surname', 'outlet__name']
 
 
 class TaskFilter(filters.FilterSet):
@@ -34,10 +49,11 @@ class TaskFilter(filters.FilterSet):
     created_after = filters.DateFilter(field_name='datetime', lookup_expr='gte')
     created_before = filters.DateFilter(field_name='datetime', lookup_expr='lte')
     task_id = filters.NumberFilter(field_name='id')
+    orderId = filters.NumberFilter(field_name='order__id')
 
     class Meta:
         model = Task
-        fields = ['name', 'status', 'deadline', 'author', 'addressee', 'created_after', 'created_before', 'task_id']
+        fields = ['name', 'status', 'deadline', 'author', 'addressee', 'created_after', 'created_before', 'task_id', 'orderId']
 
 
 

@@ -6,15 +6,16 @@ router = routers.SimpleRouter()
 
 
 urlpatterns = [
-    path('/', include(router.urls)),
+    path('', include(router.urls)),
+    path('orders/', OrderAPIList.as_view()),
+    path('orders/create/', OrderAPICreate.as_view()),
+    path('orders/<int:pk>/', OrderAPIUpdate.as_view()),
     path('outlets/', OutletAPIListCreate.as_view()),
     path('outlets/<int:pk>/', OutletAPIUpdate.as_view()),
     path('outlets_delete/<int:pk>/', OutletAPIDestroy.as_view()),
     path('products/', ProductAPIListCreate.as_view()),
     path('products/<int:pk>/', ProductAPIUpdate.as_view()),
     path('products_delete/<int:pk>/', ProductAPIDestroy.as_view()),
-    path('orders/', OrderAPIListCreate.as_view()),
-    path('orders/<int:pk>/', OrderAPIUpdate.as_view()),
     path('clients/', ClientAPIListCreate.as_view()),
     path('clients/<int:pk>/', ClientAPIUpdate.as_view()),
     path('clients_delete/<int:pk>/', ClientAPIDestroy.as_view()),

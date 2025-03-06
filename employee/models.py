@@ -6,7 +6,7 @@ from catalog.models import Outlet, Order
 
 class Profile(models.Model):
     author = models.OneToOneField(User, on_delete=models.CASCADE, primary_key=True, db_index=True)
-    photo = models.ImageField(blank=True, default='profile_pics/default.jpg', upload_to='profile_pics')
+    photo = models.ImageField(blank=True, default='profile_pics/default.png', upload_to='profile_pics')
     surname = models.CharField(verbose_name="Фамилия", max_length=100, db_index=True)
     name = models.CharField(verbose_name="Имя", max_length=100, db_index=True)
     patronymic = models.CharField(verbose_name="Отчество", max_length=100, null=True, blank=True, db_index=True)
@@ -104,6 +104,3 @@ class Progress(models.Model):
     author = models.ForeignKey(Profile, on_delete=models.CASCADE)
     record = models.CharField(verbose_name="Запись", choices=RECORD_CHOISES, max_length=100)
     datetime = models.DateTimeField(auto_now_add=True)
-
-
-

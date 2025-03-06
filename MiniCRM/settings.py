@@ -44,8 +44,20 @@ INSTALLED_APPS = [
     'rest_framework',
     'corsheaders',
     'django_filters',
+    "channels",  # Добавляем channels
 
 ]
+
+ASGI_APPLICATION = "MiniCRM.asgi.application"
+
+# WebSocket backend (используем Redis)
+CHANNEL_LAYERS = {
+    "default": {
+        "BACKEND": "channels.layers.InMemoryChannelLayer",  # Для тестов без Redis
+        # "BACKEND": "channels_redis.core.RedisChannelLayer",  # Использовать Redis
+        # "CONFIG": {"hosts": [("127.0.0.1", 6379)]},
+    },
+}
 
 MIDDLEWARE = [
     'corsheaders.middleware.CorsMiddleware',

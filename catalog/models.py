@@ -37,9 +37,18 @@ class Client(models.Model):
         return self.name
 
 class Order(models.Model):
-    product = models.ManyToManyField(Product, related_name='orders')
     outlet = models.ForeignKey(Outlet, on_delete=models.CASCADE, blank=True, null=True)
-    description = models.TextField(max_length=1000)
+    client = models.ForeignKey(Client, on_delete=models.CASCADE, blank=True, null=True)
+    description = models.TextField(max_length=1000, blank=True, null=True)
+    created_at = models.DateTimeField(auto_now_add=True)
 
     def __str__(self):
-        return self.product.name
+        return f"Order {self.id} ({self.created_at})"
+
+class OrderItem(models.Model):
+    order = models.ForeignKey(Order, on_delete=models.CASCADE, related_name="items")
+    product = models.ForeignKey(Product, on_delete=models.CASCADE)
+    quantity = models.PositiveIntegerField()
+
+    def __str__(self):
+        return f"{self.product.name} - {self.quantity}"

@@ -15,6 +15,7 @@ from rest_framework import viewsets, generics, permissions, status
 from .models import *
 from.serializers import *
 
+
 class OutletAPIListCreate(generics.ListCreateAPIView):
     queryset = Outlet.objects.all()
     serializer_class = OutletSerializer
@@ -52,14 +53,26 @@ class ProductAPIDestroy(generics.RetrieveDestroyAPIView):
     permission_classes = (IsAuthenticated,)
 
 
-class OrderAPIListCreate(generics.ListCreateAPIView):
-    queryset = Order.objects.all()
+class OrderAPIList(generics.ListAPIView):
+    queryset = Order.objects.all().prefetch_related('items')
     serializer_class = OrderSerializer
-    permission_classes = (IsAuthenticated,)
+    filter_backends = [DjangoFilterBackend]
+    #filterset_fields = ['']
 
 
-class OrderAPIUpdate(generics.RetrieveUpdateAPIView):
-    queryset = Order.objects.all()
+class OrderAPICreate(generics.CreateAPIView):
+    queryset = Order.objects.all().prefetch_related('items')
+    serializer_class = OrderSerializer
+
+    def create(self, request, *args, **kwargs):
+        serializer = self.get_serializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        self.perform_create(serializer)
+        return Response(serializer.data, status=status.HTTP_201_CREATED)
+
+
+class OrderAPIUpdate(generics.RetrieveUpdateDestroyAPIView):
+    queryset = Order.objects.all().prefetch_related('items')
     serializer_class = OrderSerializer
     permission_classes = (IsAuthenticated,)
 
