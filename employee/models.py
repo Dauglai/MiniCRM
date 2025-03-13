@@ -1,5 +1,6 @@
 from django.contrib.auth.models import User
 from django.db import models
+from django.utils.timezone import now
 
 from catalog.models import Outlet, Order
 
@@ -14,6 +15,11 @@ class Profile(models.Model):
     job = models.CharField(verbose_name="Должность", default='Продавец', max_length=100, db_index=True)
     personal = models.CharField(verbose_name="Личный телефон", max_length=100, db_index=True)
     work = models.CharField(verbose_name="Рабочий телефон", max_length=100, db_index=True)
+    last_seen = models.DateTimeField(default=now)
+
+    def is_online(self):
+        from datetime import timedelta
+        return now() - self.last_seen < timedelta(minutes=5)
 
     def __str__(self):
         return f'{self.surname} {self.name} {self.patronymic}'

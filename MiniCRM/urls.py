@@ -6,6 +6,7 @@ from drf_yasg import openapi
 from django.conf import settings
 
 import catalog
+from employee.utils import download_employee_report
 from employee.views import *
 from rest_framework import routers, permissions
 
@@ -44,6 +45,12 @@ urlpatterns = [
     path('roles/', RoleAPIListCreate.as_view(), name='role-list-create'),
     path('roles/<int:pk>/', RoleAPIUpdateDestroy.as_view(), name='role-update-destroy'),
     path('task/<int:pk>/progress/', ProgressListApi.as_view(), name='progress-task'),
+
+    path('analytics/employees/', EmployeeAnalyticsAPIView.as_view(), name='analytics-employees'),
+
+    path("analytics/download/<int:author_id>/", download_employee_report),
+
+    path("api/online_users/", get_online_users, name="online_users"),
     re_path(
         r'^swagger(?P<format>\.json|\.yaml)$',
         schema_view.without_ui(cache_timeout=0),

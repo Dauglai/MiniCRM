@@ -18,12 +18,30 @@ from rest_framework.filters import SearchFilter
 from rest_framework.response import Response
 from rest_framework.decorators import api_view
 from django.contrib.auth import get_user_model
-from .consumers import online_users
+User = get_user_model()
+from datetime import timedelta
+User = get_user_model()
+
+
+@api_view(["GET"])
+def get_online_users(request):
+    five_minutes_ago = now() - timedelta(minutes=5)
+    online_profiles = Profile.objects.filter(last_seen__gte=five_minutes_ago)  # 👈 Фильтруем активных
+    serializer = ProfileSerializer(online_profiles, many=True, read_only=True)
+    return Response(serializer.data)
+
+class EmployeeAnalyticsAPIView(generics.ListAPIView):
+    queryset = Profile.objects.all()
+    serializer_class = ProfileAnalyticsSerializer
+    permission_classes = [IsAuthenticated]
 
 User = get_user_model()
 
 @api_view(["GET"])
 def get_online_status(request):
+    """
+    Возвращает список всех пользователей и их статус (онлайн или оффлайн).
+    """
     users = User.objects.all()
     data = [
         {"id": user.id, "name": user.get_full_name(), "status": "online" if user.id in online_users else "offline"}
@@ -331,10 +349,29 @@ class MentionNotificationViewSet(viewsets.ModelViewSet):
     permission_classes = [IsAuthenticated]
 
     def get_queryset(self):
-        return MentionNotification.objects.filter(mentioned_user=self.request.user.profile, is_accepted=False)
+        return MentionNotification.objects.filter(mentioned_user=self.request.user.profile)
 
     def update(self, request, *args, **kwargs):
         instance = self.get_object()
         instance.is_accepted = True
         instance.save()
         return Response({"message": "Уведомление помечено как прочитанное"}, status=status.HTTP_200_OK)
+
+
+class TaskUpdateViewSet(viewsets.ReadOnlyModelViewSet):
+    serializer_class = TaskUpdateSerializer
+    permission_classes = [IsAuthenticated]
+
+    def get_queryset(self):
+        return Task.objects.filter(executor=self.request.user.profile).order_by("-updated_at")
+
+
+@api_view(["GET"])
+def get_notifications(request):
+    mentions = MentionNotification.objects.filter(mentioned_user=request.user.profile, is_accepted=False)
+    tasks = Task.objects.filter(executor=request.user.profile).order_by("-updated_at")[:10]
+
+    mention_data = MentionNotificationSerializer(mentions, many=True).data
+    task_data = TaskUpdateSerializer(tasks, many=True).data
+
+    return Response({"mentions": mention_data, "tasks": task_data})

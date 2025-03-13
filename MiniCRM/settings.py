@@ -14,6 +14,7 @@ from pathlib import Path
 
 from environ import ImproperlyConfigured
 
+
 # Build paths inside the project like this: BASE_DIR / 'subdir'.
 BASE_DIR = Path(__file__).resolve().parent.parent
 
@@ -50,15 +51,6 @@ INSTALLED_APPS = [
 
 ASGI_APPLICATION = "MiniCRM.asgi.application"
 
-# WebSocket backend (используем Redis)
-CHANNEL_LAYERS = {
-    "default": {
-        "BACKEND": "channels.layers.InMemoryChannelLayer",  # Для тестов без Redis
-        # "BACKEND": "channels_redis.core.RedisChannelLayer",  # Использовать Redis
-        # "CONFIG": {"hosts": [("127.0.0.1", 6379)]},
-    },
-}
-
 MIDDLEWARE = [
     'corsheaders.middleware.CorsMiddleware',
     'django.middleware.common.CommonMiddleware',
@@ -69,6 +61,7 @@ MIDDLEWARE = [
     'django.middleware.common.CommonMiddleware',
     'django.middleware.csrf.CsrfViewMiddleware',
     'django.contrib.messages.middleware.MessageMiddleware',
+    "employee.middleware.UpdateLastSeenMiddleware",
 ]
 
 CORS_ALLOWED_ORIGINS = [

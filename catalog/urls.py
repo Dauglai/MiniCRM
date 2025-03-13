@@ -1,5 +1,7 @@
 from django.urls import path, include
 from rest_framework import routers
+
+from employee.utils import download_employee_report
 from .views import *
 
 router = routers.SimpleRouter()
@@ -22,6 +24,7 @@ urlpatterns = [
     path('groups/', GroupAPIListCreate.as_view(), name='group-list-create'),
     path('groups/<int:pk>/', GroupAPIUpdateDestroy.as_view(), name='group-update-destroy'),
     path('products/import-export/', ProductImportExportView.as_view(), name='product-import-export'),
+    path("analytics/download/", download_employee_report, name="download-employee-report"),
 
 
 ]

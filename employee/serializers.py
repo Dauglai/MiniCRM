@@ -1,16 +1,21 @@
+from datetime import timedelta
+
 from django.contrib.auth.models import User
 from pkg_resources import require
+from requests import Response
 from rest_framework import serializers
+from rest_framework.decorators import api_view
 
-from catalog.models import Order
+from catalog.models import Order, OrderItem
 from catalog.serializers import OrderSerializer
-from .consumers import online_users
 from .models import Task, Profile, Comment, Result, Coordination, MentionNotification, Role, Progress
 from django.core.mail import send_mail
 from django.conf import settings
 import random
 import string
 from django.core.exceptions import ObjectDoesNotExist
+from django.utils.timezone import now
+
 
 def send_password_email(email, password):
     """Функция отправки сгенерированного пароля на почту пользователя"""
@@ -26,6 +31,7 @@ class UserSerializer(serializers.ModelSerializer):
         fields = ['id', 'email']
 
 
+
 class ProfileSerializer(serializers.ModelSerializer):
     email = serializers.EmailField(source="user.email", required=False)
     password = serializers.CharField(write_only=True, required=False)
@@ -37,7 +43,9 @@ class ProfileSerializer(serializers.ModelSerializer):
         fields = ['author', "name", "surname", "patronymic", "birthday", "work", "job", "personal", "photo", "email", "password", "status"]
 
     def get_status(self, obj):
-        return "online" if obj.author.id in online_users else "offline"
+        if obj.last_seen and now() - obj.last_seen < timedelta(minutes=5):  # 👈 Проверяем активность
+            return "online"
+        return "offline"
 
     def update(self, instance, validated_data):
         user_data = validated_data.pop("user", {})
@@ -64,6 +72,59 @@ def generate_password():
     """Генерация случайного пароля из 12 символов"""
     characters = string.ascii_letters + string.digits + string.punctuation
     return ''.join(random.choice(characters) for _ in range(12))
+
+
+@api_view(["GET"])
+def get_online_users(request):
+    five_minutes_ago = now() - timedelta(minutes=5)
+    online_profiles = Profile.objects.filter(last_seen__gte=five_minutes_ago)  # 👈 Фильтруем активных
+    serializer = ProfileSerializer(online_profiles, many=True)
+    return Response(serializer.data)
+
+class ProfileAnalyticsSerializer(serializers.ModelSerializer):
+    total_orders = serializers.SerializerMethodField()
+    avg_price_segment = serializers.SerializerMethodField()
+    completed_tasks_on_time = serializers.SerializerMethodField()
+    overdue_tasks = serializers.SerializerMethodField()
+    avg_task_completion_time = serializers.SerializerMethodField()
+    order_timestamps = serializers.SerializerMethodField()
+    task_timestamps = serializers.SerializerMethodField()
+    author = UserSerializer(read_only=True)
+
+    class Meta:
+        model = Profile
+        fields = [
+            'author', "name", "surname", "photo", "total_orders", "avg_price_segment",
+            "completed_tasks_on_time", "overdue_tasks", "avg_task_completion_time",
+            "order_timestamps", "task_timestamps"
+        ]
+
+    def get_total_orders(self, obj):
+        return Order.objects.filter(outlet__outletInfo__profile=obj).count()
+
+    def get_avg_price_segment(self, obj):
+        order_items = OrderItem.objects.filter(order__outlet__outletInfo__profile=obj)
+        total_price = sum(item.product.price * item.quantity for item in order_items)
+        total_items = sum(item.quantity for item in order_items)
+        return total_price / total_items if total_items > 0 else 0
+
+    def get_completed_tasks_on_time(self, obj):
+        completed_tasks = Result.objects.filter(author=obj, is_end=True)
+        return completed_tasks.filter(task__deadline__gte=now().date()).count()
+
+    def get_overdue_tasks(self, obj):
+        return Task.objects.filter(addressee=obj, status="Завершена", deadline__lt=now().date()).count()
+
+    def get_avg_task_completion_time(self, obj):
+        completed_tasks = Result.objects.filter(author=obj, is_end=True).select_related("task")
+        total_time = sum((result.task.deadline - result.task.datetime.date()).days for result in completed_tasks)
+        return total_time / completed_tasks.count() if completed_tasks.count() > 0 else 0
+
+    def get_order_timestamps(self, obj):
+        return list(Order.objects.filter(outlet__outletInfo__profile=obj).values_list("created_at", flat=True))
+
+    def get_task_timestamps(self, obj):
+        return list(Task.objects.filter(addressee=obj).values_list("datetime", flat=True))
 
 
 class ProfileCreateSerializer(serializers.ModelSerializer):
@@ -181,8 +242,14 @@ from .models import MentionNotification
 
 class MentionNotificationSerializer(serializers.ModelSerializer):
     comment_text = serializers.CharField(source="comment.text", read_only=True)
+    comment = CommentSerializer(read_only=True)
     task_id = serializers.IntegerField(source="comment.task.id", read_only=True)
 
     class Meta:
         model = MentionNotification
-        fields = ['id', 'comment_text', 'task_id', 'is_accepted', 'created_at']
+        fields = ['id', 'comment_text','comment', 'task_id', 'is_accepted', 'created_at']
+
+class TaskUpdateSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = Task
+        fields = ["id", "title", "status", "updated_at"]
