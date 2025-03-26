@@ -31,24 +31,27 @@ from .models import Order, OrderItem, Product
 
 class OrderItemSerializer(serializers.ModelSerializer):
     product = serializers.PrimaryKeyRelatedField(queryset=Product.objects.all())
+    name = serializers.ReadOnlyField(source='product.name')
 
     class Meta:
         model = OrderItem
-        fields = ['product', 'quantity']
+        fields = ['product', 'quantity', 'name']
 
 
 class OrderSerializer(serializers.ModelSerializer):
     items = OrderItemSerializer(many=True)
     task = serializers.SerializerMethodField(read_only=True)
+    client_info = ClientSerializer(read_only=True)
 
     class Meta:
         model = Order
-        fields = ['id', 'outlet', 'description', 'items', 'task']
+        fields = ['id', 'outlet', 'description', 'items', 'task', 'client', 'client_info']
 
     def get_task(self, obj):
         from employee.serializers import TaskSerializer
         from employee.models import Task
-        task = Task.objects.get(order=obj.id)
+
+        task = Task.objects.filter(order=obj.id).first()
         return TaskSerializer(task).data if task else None
 
     def create(self, validated_data):

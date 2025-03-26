@@ -29,6 +29,7 @@ router.register(r'notifications', MentionNotificationViewSet, basename='notifica
 urlpatterns = [
     path('admin/', admin.site.urls),
     path('api-auth/', include('rest_framework.urls')),
+    path("api-auth/csrf/", csrf_token_view, name="csrf"),
     path('api/', include(router.urls)),
     path('', include('catalog.urls')),
     path('accounts/profile/', ProfileAPIList.as_view()),

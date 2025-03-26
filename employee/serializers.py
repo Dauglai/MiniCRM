@@ -33,17 +33,19 @@ class UserSerializer(serializers.ModelSerializer):
 
 
 class ProfileSerializer(serializers.ModelSerializer):
-    email = serializers.EmailField(source="user.email", required=False)
+    email = serializers.EmailField(source="author.email", required=False, read_only=True)
     password = serializers.CharField(write_only=True, required=False)
     author = UserSerializer(read_only=True)
     status = serializers.SerializerMethodField()
+    id = serializers.IntegerField(source="author.id", required=False, read_only=True)
+
 
     class Meta:
         model = Profile
-        fields = ['author', "name", "surname", "patronymic", "birthday", "work", "job", "personal", "photo", "email", "password", "status"]
+        fields = ["id", "author", "name", "surname", "patronymic", "birthday", "work", "job", "personal", "photo", "email", "password", "status"]
 
     def get_status(self, obj):
-        if obj.last_seen and now() - obj.last_seen < timedelta(minutes=5):  # 👈 Проверяем активность
+        if obj.is_online():  # 👈 Проверяем активность
             return "online"
         return "offline"
 
@@ -90,13 +92,14 @@ class ProfileAnalyticsSerializer(serializers.ModelSerializer):
     order_timestamps = serializers.SerializerMethodField()
     task_timestamps = serializers.SerializerMethodField()
     author = UserSerializer(read_only=True)
+    status = serializers.SerializerMethodField()
 
     class Meta:
         model = Profile
         fields = [
             'author', "name", "surname", "photo", "total_orders", "avg_price_segment",
             "completed_tasks_on_time", "overdue_tasks", "avg_task_completion_time",
-            "order_timestamps", "task_timestamps"
+            "order_timestamps", "task_timestamps", 'status'
         ]
 
     def get_total_orders(self, obj):
@@ -125,6 +128,11 @@ class ProfileAnalyticsSerializer(serializers.ModelSerializer):
 
     def get_task_timestamps(self, obj):
         return list(Task.objects.filter(addressee=obj).values_list("datetime", flat=True))
+
+    def get_status(self, obj):
+        if obj.is_online():  # 👈 Проверяем активность
+            return "online"
+        return "offline"
 
 
 class ProfileCreateSerializer(serializers.ModelSerializer):

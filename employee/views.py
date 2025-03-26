@@ -1,5 +1,6 @@
 import re
-from django.http import HttpResponseRedirect
+from django.http import HttpResponseRedirect, JsonResponse
+from django.middleware.csrf import get_token
 from django_filters.rest_framework import DjangoFilterBackend
 from drf_yasg.utils import swagger_auto_schema
 from rest_framework.parsers import MultiPartParser, FormParser
@@ -34,20 +35,6 @@ class EmployeeAnalyticsAPIView(generics.ListAPIView):
     queryset = Profile.objects.all()
     serializer_class = ProfileAnalyticsSerializer
     permission_classes = [IsAuthenticated]
-
-User = get_user_model()
-
-@api_view(["GET"])
-def get_online_status(request):
-    """
-    Возвращает список всех пользователей и их статус (онлайн или оффлайн).
-    """
-    users = User.objects.all()
-    data = [
-        {"id": user.id, "name": user.get_full_name(), "status": "online" if user.id in online_users else "offline"}
-        for user in users
-    ]
-    return Response(data)
 
 
 class ProfileSearchAPIView(generics.ListAPIView):
@@ -160,6 +147,8 @@ class ProfileAPIList(generics.ListAPIView):
         # Возвращает профиль текущего пользователя
         return Profile.objects.filter(author=self.request.user)
 
+def csrf_token_view(request):
+    return JsonResponse({"csrfToken": get_token(request)})
 
 class ProfileAPICreate(generics.CreateAPIView):
     queryset = Profile.objects.all()
@@ -332,7 +321,7 @@ class ResultAPIList(APIView):
         except Result.DoesNotExist:
             return Response({'message': 'Результат не найден'}, status=status.HTTP_404_NOT_FOUND)
 
-        if task.adresse == request.user.profile:
+        if task.addressee == request.user.profile:
             serializer = ResultSerializer(result, data=request.data, partial=True, context={'request': request})
             serializer.is_valid(raise_exception=True)
             serializer.save()

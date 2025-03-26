@@ -34,7 +34,7 @@ class Client(models.Model):
     address = models.CharField(max_length=1000)
 
     def __str__(self):
-        return self.name
+        return f'{self.surname} {self.name} {self.patronymic}'
 
 class Order(models.Model):
     outlet = models.ForeignKey(Outlet, on_delete=models.CASCADE, blank=True, null=True)

@@ -9,7 +9,7 @@ router = routers.SimpleRouter()
 
 urlpatterns = [
     path('', include(router.urls)),
-    path('orders/', OrderAPIList.as_view()),
+    path('api/orders/', OrderAPIList.as_view()),
     path('orders/create/', OrderAPICreate.as_view()),
     path('orders/<int:pk>/', OrderAPIUpdate.as_view()),
     path('outlets/', OutletAPIListCreate.as_view()),

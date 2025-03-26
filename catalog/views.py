@@ -57,7 +57,6 @@ class OrderAPIList(generics.ListAPIView):
     queryset = Order.objects.all().prefetch_related('items')
     serializer_class = OrderSerializer
     filter_backends = [DjangoFilterBackend]
-    #filterset_fields = ['']
 
 
 class OrderAPICreate(generics.CreateAPIView):
